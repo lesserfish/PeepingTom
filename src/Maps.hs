@@ -191,7 +191,7 @@ getMapInfo pid = do
     let info = MapInfo reg pid execname
     return info
 
--- Filters
+-- Filters for Regions
 
 filterMap :: (Region -> Bool) -> MapInfo -> MapInfo
 filterMap f maps = maps{regions = filtered_regions}
@@ -213,8 +213,6 @@ filterMappings execname region = not_mapping || not_exec
   where
     not_mapping = ((inodeID . mapID) $ region) == 0
     not_exec = (fp region == execname)
-
--- not_exec = trace (printf "execname = '%s' : '%s' = filepath" (fp region) execname) (fp region == execname)
 
 defaultFilter :: MapInfo -> (Region -> Bool)
 defaultFilter mapinfo = func
