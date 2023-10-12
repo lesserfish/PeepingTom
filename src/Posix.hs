@@ -54,30 +54,53 @@ foreign import capi safe "unistd.h pwrite"
 
 pwrite :: FD -> B.ByteString -> Int -> Int -> IO Int
 pwrite fd raw_data count offset = do
-    let pwrite' ptr = do
-            let cfd = fromIntegral fd :: CInt
-            let ccount = fromIntegral count :: CSize
-            let coffset = fromIntegral offset :: CSize
-            cstatus <- raw_pwrite cfd ptr ccount coffset
-            return cstatus
-    status <- BU.unsafeUseAsCString raw_data pwrite'
-    if (fromIntegral status :: Int) < 0 then (throw $ PosixException (printf "Could not write to file with pid %d." fd)) else return ()
-    return (fromIntegral status)
+    let pwrite' buffer = do
+            let ciFD = fromIntegral fd :: CInt
+            let csBytes = fromIntegral count :: CSize
+            let csOffset = fromIntegral offset :: CSize
+            csBytes_written <- raw_pwrite ciFD buffer csBytes csOffset
+            let iBytes_written = fromIntegral csBytes_written
+            if iBytes_written < 0 then (throw $ PosixException (printf "Could not write to file with pid %d." fd)) else return ()
+            return iBytes_written
+    iBytes_written <- BU.unsafeUseAsCString raw_data pwrite'
+    return iBytes_written
 
 foreign import capi safe "unistd.h pread"
     raw_pread :: CInt -> Ptr a -> CSize -> CSize -> IO CSize
 
-pread :: FD -> Int -> Int -> IO (B.ByteString, Int)
+pread :: FD -> Int -> Int -> IO B.ByteString
 pread fd count offset = do
-    let pread' (cstring, clen) = do
-            let cfd = fromIntegral fd :: CInt
-            let ccount = fromIntegral count :: CSize
-            let coffset = fromIntegral offset :: CSize
-            cstatus <- raw_pread cfd cstring ccount coffset
-            bytestring <- BU.unsafePackCStringLen (cstring, clen) :: IO B.ByteString
-            return (bytestring, cstatus)
-    (bytestring, size) <- withCStringLen (replicate count '\0') pread'
-    if (fromIntegral size :: Int) < 0 then (throw $ PosixException (printf "Could not read file with PID %d. Are you sure you have the permission?" fd)) else return ()
-    return (bytestring, fromIntegral size)
+    let pread' (buffer, iBufsize) = do
+            let csBufsize = fromIntegral iBufsize :: CSize
+            let ciFD = fromIntegral fd :: CInt
+            let csOffset = fromIntegral offset :: CSize
+            ciBytes_read <- raw_pread ciFD buffer csBufsize csOffset
+            let iBytes_read = fromIntegral ciBytes_read :: Int
+            if (iBytes_read) < 0 then (throw $ PosixException (printf "Could not read file with PID %d. Are you sure you have the permission?" fd)) else return ()
+            bytestring <- BU.unsafePackCStringLen (buffer, iBytes_read) :: IO B.ByteString
+            return bytestring
+    bytestring <- withCStringLen (replicate count '\0') pread'
+    return bytestring
+
+foreign import capi safe "helper.h get_path_max"
+    raw_maxpath :: CInt
+
+maxPath :: Int
+maxPath = fromIntegral raw_maxpath
+
+foreign import capi safe "unistd.h readlink"
+    raw_readlink :: Ptr CChar -> Ptr CChar -> CSize -> IO CSize
+
+readlink :: String -> IO String
+readlink filepath = do
+    let readlink' pathname (buffer, iBufsize) = do
+            let csBufsize = fromIntegral iBufsize :: CSize
+            csBytes_read <- raw_readlink pathname buffer csBufsize
+            let iBytes_read = fromIntegral csBytes_read :: Int
+            if iBytes_read < 0 then (throw $ PosixException (printf "Could not readlink file %s." filepath)) else return ()
+            output <- peekCStringLen (buffer, iBytes_read) :: IO String
+            return output
+    rl <- withCString filepath (\fp -> withCStringLen (replicate maxPath '\0') (\(buf, bsize) -> readlink' fp (buf, bsize)))
+    return rl
 
 -- raw_ptrace = undefined

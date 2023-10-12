@@ -1,0 +1,15 @@
+1. What is considered interesting under the REGION_HEAP_STACK_EXECUTABLE?
+    1.1 It needs to have read permission
+    1.2 It needs to have write permission
+    1.3 It needs to have size greater than 0
+    1.4 If the filename is the same name as the executalbe (that is in /proc/pid/exe), then it is interesting
+    1.5 Otherwise, if filename is empty, it is interesting. (equivalently, it has offset 0)
+    1.6 If it is the HEAP or the Stack, it is interesting
+
+    The following steps SHOULD get the desired files
+
+    1. Get all the mapper files
+    2. Remove those who do not have Read permission
+    3. Remove those who do not have Write permission
+    4. Remove those who have offset greater than 0
+        WITH THE EXCEPTION, of the one who has execname on it's file description

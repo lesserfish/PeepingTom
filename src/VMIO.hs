@@ -3,6 +3,7 @@ module VMIO where
 import qualified Data.ByteString as B
 import qualified Maps as M
 import qualified Posix as P
+import Text.Printf
 
 data RData = RData {regdata :: B.ByteString, reginfo :: M.Region}
 
@@ -12,12 +13,15 @@ instance Show RData where
             ++ " \tBytes Read: "
             ++ show (B.length (regdata rdata))
 
+memFile :: Int -> String
+memFile pid = printf "/proc/%d/mem" pid
+
 readChunks :: P.FD -> (Int, Int) -> Int -> B.ByteString -> IO B.ByteString
 readChunks fd (start_address, end_address) chunk_size bs
     | start_address >= end_address = return bs
     | otherwise = do
         let count = min (end_address - start_address) chunk_size
-        (chunk, _) <- P.pread fd count start_address
+        chunk <- P.pread fd count start_address
         let bs' = B.append bs chunk
         readChunks fd (start_address + chunk_size, end_address) chunk_size bs'
 
@@ -31,7 +35,7 @@ readFileSection filepath (start_address, end_address) chunk_size = do
 loadRegion :: Int -> M.Region -> IO RData
 loadRegion chunk_size region = do
     let pid = M.rPID region
-    let filepath = "/proc/" ++ show pid ++ "/mem"
+    let filepath = memFile pid
     let start_address = M.startAddress region
     let end_address = M.endAddress region
     bytes <- readFileSection filepath (start_address, end_address) chunk_size
@@ -39,7 +43,7 @@ loadRegion chunk_size region = do
     putStrLn $ "Finished loading region " ++ show (M.regionID region)
     return rdata
 
-loadMap :: Int -> M.Map -> IO [RData]
+loadMap :: Int -> M.Regions -> IO [RData]
 loadMap chunk_size m = sequence $ fmap (loadRegion chunk_size) m
 
 debug :: IO ()

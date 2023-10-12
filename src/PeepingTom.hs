@@ -4,7 +4,7 @@ module PeepingTom where
 
 import qualified Data.ByteString as B
 import qualified Maps as M
-import Types
+import Type
 import VMIO
 
 data Candidate = forall a. (Show a, Type a) => Candidate {caddress :: Int, cvalue :: a, pvalue :: a, cregion :: M.Region}
@@ -39,6 +39,7 @@ updateCandidates candidates = sequence $ fmap updateCandidate candidates
 slice :: Int -> Int -> B.ByteString -> B.ByteString
 slice start len = B.take len . B.drop start
 
+-- Extract Candidates from Chunks of memory
 extractHelper :: (Type a) => a -> RData -> M.Address -> Candidates
 extractHelper helper rdata offset = candidates
   where
@@ -52,34 +53,41 @@ extractHelper helper rdata offset = candidates
     that = if (mem_position + offset > end_position) then [] else extractHelper helper rdata (offset + 1) -- If we hit the end of the memory region, stop. Else, shift one byte and continue
     candidates = this ++ that
 
+extracti8 :: RData -> Candidates
+extracti8 rdata = extractHelper (0 :: Int8) rdata 0
+
+extracti16 :: RData -> Candidates
+extracti16 rdata = extractHelper (0 :: Int16) rdata 0
+
 extracti32 :: RData -> Candidates
 extracti32 rdata = extractHelper (0 :: Int32) rdata 0
 
+extracti64 :: RData -> Candidates
+extracti64 rdata = extractHelper (0 :: Int64) rdata 0
+
+extractu8 :: RData -> Candidates
+extractu8 rdata = extractHelper (0 :: UInt8) rdata 0
+
+extractu16 :: RData -> Candidates
+extractu16 rdata = extractHelper (0 :: UInt16) rdata 0
+
+extractu32 :: RData -> Candidates
+extractu32 rdata = extractHelper (0 :: UInt32) rdata 0
+
+extractu64 :: RData -> Candidates
+extractu64 rdata = extractHelper (0 :: UInt64) rdata 0
+
+extractF :: RData -> Candidates
+extractF rdata = extractHelper (0 :: Float) rdata 0
+
+extractD :: RData -> Candidates
+extractD rdata = extractHelper (0 :: Double) rdata 0
+
 debug :: IO ()
 debug = do
-    let reg = M.Region 0xAF (0xAF + 0x06) (M.Permission M.R M.W M.X M.S) 0 (M.MapID 0 0 0) "" 0 0
-    let raw_data = [0x00, 0x01, 0x02, 0x03, 0x04, 0x05]
-    let bs_data = B.pack raw_data
-    let rdata = RData bs_data reg
-    let candidates = extracti32 rdata
-    putStrLn $ showCandidates candidates
-    return ()
-
-filterEq :: Integer -> Candidate -> Bool
-filterEq y (Candidate _ x _ _) = (fromInteger y) == x
-
-debug2 :: IO ()
-debug2 = do
     let pid = 1012533 :: Int
-    maps <- M.getMap pid
-    let maps' = filter M.rwFilter maps
-    let maps'' = filter M.notMapping maps'
-    let fmaps = maps''
-    putStrLn $ "Total maps: " ++ show (length fmaps)
-    raw_data <- VMIO.loadMap 10000 fmaps
-    -- putStrLn $ show raw_data
-    let section1 = raw_data !! 0
-    let candidates = extracti32 section1
-    let fcandidates = filter (filterEq 11) candidates
-    putStrLn $ showCandidates fcandidates
+    all_maps <- M.getMapInfo pid
+    let maps = M.filterMap (M.defaultFilter all_maps) all_maps
+    putStrLn $ show maps
+    putStrLn $ show . length . M.regions $ maps
     return ()

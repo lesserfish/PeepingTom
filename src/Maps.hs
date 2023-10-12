@@ -8,16 +8,19 @@ module Maps (
     Offset,
     MapID (..),
     Region (..),
-    Map,
-    getMap,
-    rwFilter,
-    notMapping,
-    debug, -- TODO: Remove this line
+    Regions,
+    MapInfo (..),
+    getRegions,
+    getMapInfo,
+    filterMap,
+    filterRW,
+    filterMappings,
+    defaultFilter,
 ) where
 
 import qualified Data.List.Split as SPL
-import Data.Word
 import Numeric (readHex)
+import qualified Posix as P
 import qualified System.IO as IO
 import Text.Printf (printf)
 
@@ -26,15 +29,16 @@ data W = W | NW deriving (Show)
 data X = X | NX deriving (Show)
 data S = S | P deriving (Show)
 data Permission = Permission {r :: R, w :: W, x :: X, s :: S}
-
 type Address = Int
-
 type Offset = Int
-
 data MapID = MapID {majorID :: Int, minorID :: Int, inodeID :: Int}
-
 data Region = Region {startAddress :: Address, endAddress :: Address, permission :: Permission, offset :: Offset, mapID :: MapID, fp :: FilePath, regionID :: Int, rPID :: Int}
-type Map = [Region]
+type Regions = [Region]
+data MapInfo = MapInfo {regions :: Regions, mPID :: Int, executableName :: String}
+
+showRegions :: Regions -> String
+showRegions [] = ""
+showRegions (y : ys) = show y ++ "\n" ++ (showRegions ys)
 
 instance Show Permission where
     show p = sr ++ sw ++ sx ++ ss
@@ -57,8 +61,7 @@ instance Show Region where
     show m = out
       where
         fs =
-            "\n"
-                ++ (printf "%08x" (startAddress m))
+            (printf "%08x" (startAddress m))
                 ++ "-"
                 ++ (printf "%08x" (endAddress m))
                 ++ " "
@@ -71,6 +74,20 @@ instance Show Region where
             length fs
         ss = (replicate (73 - fsl) ' ') ++ (fp m)
         out = fs ++ ss
+instance Show MapInfo where
+    show mi =
+        "PID: "
+            ++ show (mPID mi)
+            ++ "\nExecutable name: "
+            ++ executableName mi
+            ++ "\nRegions: \n"
+            ++ showRegions (regions mi)
+
+mapsFile :: Int -> String
+mapsFile pid = printf "/proc/%d/maps" pid
+
+exeFile :: Int -> String
+exeFile pid = printf "/proc/%d/exe" pid
 
 parseHex :: String -> Int
 parseHex str = case readHex str of
@@ -141,17 +158,17 @@ processLine pid line rid
     filepath = getFilePath (drop 5 seg)
     mregion = Region{startAddress = start_addr, endAddress = end_addr, permission = perm, offset = ofs, mapID = ids, fp = filepath, regionID = rid, rPID = pid}
 
-processLines' :: Int -> [String] -> Int -> Map
+processLines' :: Int -> [String] -> Int -> Regions
 processLines' _ [] _ = []
 processLines' pid (str : rest) rid = this ++ that
   where
     this = [processLine pid str rid]
     that = processLines' pid rest (rid + 1)
 
-processLines :: Int -> [String] -> Map
+processLines :: Int -> [String] -> Regions
 processLines pid l = processLines' pid l 0
 
-parseFile :: Int -> FilePath -> IO Map
+parseFile :: Int -> FilePath -> IO Regions
 parseFile pid filepath = do
     content <- IO.readFile filepath
     let l = lines content
@@ -159,29 +176,50 @@ parseFile pid filepath = do
     return vas
 
 -- Extracts Virtual memory information from /proc/pid/maps
-getMap :: Int -> IO Map
-getMap _pid = parseFile _pid ("/proc/" ++ show _pid ++ "/maps")
+getRegions :: Int -> IO Regions
+getRegions pid = parseFile pid (mapsFile pid)
 
--- Filter to select only the memory regions with read/write permissions.
--- These are the regions of interest where we will search for our variables
-rwFilter :: Region -> Bool
-rwFilter mregion = readP && writeP
+getExecName :: Int -> IO String
+getExecName pid = do
+    execname <- P.readlink (exeFile pid)
+    return execname
+
+getMapInfo :: Int -> IO MapInfo
+getMapInfo pid = do
+    reg <- getRegions pid
+    execname <- getExecName pid
+    let info = MapInfo reg pid execname
+    return info
+
+-- Filters
+
+filterMap :: (Region -> Bool) -> MapInfo -> MapInfo
+filterMap f maps = maps{regions = filtered_regions}
   where
-    readP = case (r (permission mregion)) of
+    filtered_regions = filter f (regions maps)
+
+filterRW :: Region -> Bool
+filterRW region = readP && writeP
+  where
+    readP = case (r (permission region)) of
         R -> True
         NR -> False
-    writeP = case (w (permission mregion)) of
+    writeP = case (w (permission region)) of
         W -> True
         NW -> False
 
-notMapping :: Region -> Bool
-notMapping mregion = (offset mregion) == 0
+filterMappings :: String -> Region -> Bool
+filterMappings execname region = not_mapping || not_exec
+  where
+    not_mapping = ((inodeID . mapID) $ region) == 0
+    not_exec = (fp region == execname)
 
-debug :: Int -> Int -> IO ()
-debug _pid i = do
-    content <- IO.readFile ("/proc/" ++ show _pid ++ "/maps")
-    let l = lines content
-    let vas = processLines _pid l
-    putStrLn $ l !! i
-    putStrLn $ show (vas !! i)
-    return ()
+-- not_exec = trace (printf "execname = '%s' : '%s' = filepath" (fp region) execname) (fp region == execname)
+
+defaultFilter :: MapInfo -> (Region -> Bool)
+defaultFilter mapinfo = func
+  where
+    func reg = rwf && maf
+      where
+        rwf = filterRW reg
+        maf = filterMappings (executableName mapinfo) reg

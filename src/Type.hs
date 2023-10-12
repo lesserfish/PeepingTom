@@ -1,18 +1,18 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
-module Types where
+module Type where
 
 import qualified Data.Binary.Get as BG
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Int as I
+import Data.Typeable
 import qualified Data.Word as W
 import qualified GHC.ByteOrder as Endian
 
-class (Show a, Num a, Ord a, Eq a) => Type a where
+class (Typeable a, Show a) => Type a where
     name :: a -> String
-    zero :: a
     size :: a -> Int
     fromByteString :: B.ByteString -> a
     toByteString :: a -> B.ByteString
@@ -47,7 +47,6 @@ i8ToBS x = BL.toStrict (BB.toLazyByteString . BB.int8 $ x)
 
 instance Type Int8 where
     name _ = "I8"
-    zero = 0
     size _ = 1
     fromByteString = i8FromBS
     toByteString = i8ToBS
@@ -66,7 +65,6 @@ i16ToBSbe :: Int16 -> B.ByteString
 i16ToBSbe x = BL.toStrict (BB.toLazyByteString . BB.int16BE $ x)
 instance Type Int16 where
     name _ = "I16"
-    zero = 0
     size _ = 2
     fromByteString
         | Endian.targetByteOrder == Endian.LittleEndian = i16FromBSle
@@ -89,7 +87,6 @@ i32ToBSbe :: Int32 -> B.ByteString
 i32ToBSbe x = BL.toStrict (BB.toLazyByteString . BB.int32BE $ x)
 instance Type Int32 where
     name _ = "I32"
-    zero = 0
     size _ = 4
     fromByteString
         | Endian.targetByteOrder == Endian.LittleEndian = i32FromBSle
@@ -112,7 +109,6 @@ i64ToBSbe :: Int64 -> B.ByteString
 i64ToBSbe x = BL.toStrict (BB.toLazyByteString . BB.int64BE $ x)
 instance Type Int64 where
     name _ = "I64"
-    zero = 0
     size _ = 8
     fromByteString
         | Endian.targetByteOrder == Endian.LittleEndian = i64FromBSle
@@ -130,7 +126,6 @@ u8ToBS x = BL.toStrict (BB.toLazyByteString . BB.word8 $ x)
 
 instance Type UInt8 where
     name _ = "U8"
-    zero = 0
     size _ = 1
     fromByteString = u8FromBS
     toByteString = u8ToBS
@@ -149,7 +144,6 @@ u16ToBSbe :: UInt16 -> B.ByteString
 u16ToBSbe x = BL.toStrict (BB.toLazyByteString . BB.word16BE $ x)
 instance Type UInt16 where
     name _ = "U16"
-    zero = 0
     size _ = 2
     fromByteString
         | Endian.targetByteOrder == Endian.LittleEndian = u16FromBSle
@@ -172,7 +166,6 @@ u32ToBSbe :: UInt32 -> B.ByteString
 u32ToBSbe x = BL.toStrict (BB.toLazyByteString . BB.word32BE $ x)
 instance Type UInt32 where
     name _ = "U32"
-    zero = 0
     size _ = 4
     fromByteString
         | Endian.targetByteOrder == Endian.LittleEndian = u32FromBSle
@@ -195,7 +188,6 @@ u64ToBSbe :: UInt64 -> B.ByteString
 u64ToBSbe x = BL.toStrict (BB.toLazyByteString . BB.word64BE $ x)
 instance Type UInt64 where
     name _ = "U64"
-    zero = 0
     size _ = 8
     fromByteString
         | Endian.targetByteOrder == Endian.LittleEndian = u64FromBSle
@@ -219,7 +211,6 @@ fToBSbe x = BL.toStrict (BB.toLazyByteString . BB.floatBE $ x)
 
 instance Type Float where
     name _ = "F"
-    zero = 0
     size _ = 4
     fromByteString
         | Endian.targetByteOrder == Endian.LittleEndian = fFromBSle
@@ -243,7 +234,6 @@ dToBSbe x = BL.toStrict (BB.toLazyByteString . BB.doubleBE $ x)
 
 instance Type Double where
     name _ = "D"
-    zero = 0
     size _ = 8
     fromByteString
         | Endian.targetByteOrder == Endian.LittleEndian = dFromBSle
