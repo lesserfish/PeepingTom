@@ -11,7 +11,7 @@ import Data.Typeable
 import qualified Data.Word as W
 import qualified GHC.ByteOrder as Endian
 
-class (Typeable a, Show a) => Type a where
+class (Typeable a, Show a, Eq a) => Type a where
     name :: a -> String
     size :: a -> Int
     fromByteString :: B.ByteString -> a
