@@ -5,7 +5,6 @@ module Maps (
     S (..),
     Permission (..),
     Address,
-    Offset,
     MapID (..),
     Region (..),
     Regions,
@@ -19,6 +18,7 @@ module Maps (
 ) where
 
 import qualified Data.List.Split as SPL
+import Internal
 import Numeric (readHex)
 import qualified Posix as P
 import qualified System.IO as IO
@@ -29,12 +29,10 @@ data W = W | NW deriving (Show)
 data X = X | NX deriving (Show)
 data S = S | P deriving (Show)
 data Permission = Permission {r :: R, w :: W, x :: X, s :: S}
-type Address = Int
-type Offset = Int
 data MapID = MapID {majorID :: Int, minorID :: Int, inodeID :: Int}
-data Region = Region {startAddress :: Address, endAddress :: Address, permission :: Permission, offset :: Offset, mapID :: MapID, fp :: FilePath, regionID :: Int, rPID :: Int}
+data Region = Region {startAddress :: Address, endAddress :: Address, permission :: Permission, offset :: Address, mapID :: MapID, fp :: FilePath, regionID :: Int, rPID :: PID}
 type Regions = [Region]
-data MapInfo = MapInfo {regions :: Regions, mPID :: Int, executableName :: String}
+data MapInfo = MapInfo {regions :: Regions, mPID :: PID, executableName :: String}
 
 showRegions :: Regions -> String
 showRegions [] = ""
@@ -83,10 +81,10 @@ instance Show MapInfo where
             ++ "\nRegions: \n"
             ++ showRegions (regions mi)
 
-mapsFile :: Int -> String
+mapsFile :: PID -> String
 mapsFile pid = printf "/proc/%d/maps" pid
 
-exeFile :: Int -> String
+exeFile :: PID -> String
 exeFile pid = printf "/proc/%d/exe" pid
 
 parseHex :: String -> Int
@@ -100,7 +98,7 @@ parseHex str = case readHex str of
 getAddr :: String -> (Address, Address)
 getAddr str
     | wlen < 2 = error ("Could not parse the following string into two addresses: " ++ str)
-    | otherwise = (start, end)
+    | otherwise = (fromIntegral start, fromIntegral end)
   where
     wl = SPL.splitOn "-" str
     wlen = length wl
@@ -123,8 +121,8 @@ getPermission str = perm
     perm = Permission rp wp xp sp
 
 -- Offset is simply written as a hex number
-getOffset :: String -> Offset
-getOffset str = parseHex str
+getOffset :: String -> Address
+getOffset str = fromIntegral $ parseHex str
 
 -- ID is written as
 -- major_id:minor_id inode_id
@@ -144,7 +142,7 @@ getFilePath strs = unwords strs
 
 -- Each line in /proc/pid/maps correspond to a region in virtual memory
 -- This function takes a single line, and extracts the information as a Region type
-processLine :: Int -> String -> Int -> Region
+processLine :: PID -> String -> Int -> Region
 processLine pid line rid
     | wlen < 5 = error ("Could not parse maps file. The following line does not have 5 columns: \n" ++ line)
     | otherwise = mregion
@@ -158,17 +156,17 @@ processLine pid line rid
     filepath = getFilePath (drop 5 seg)
     mregion = Region{startAddress = start_addr, endAddress = end_addr, permission = perm, offset = ofs, mapID = ids, fp = filepath, regionID = rid, rPID = pid}
 
-processLines' :: Int -> [String] -> Int -> Regions
+processLines' :: PID -> [String] -> Int -> Regions
 processLines' _ [] _ = []
 processLines' pid (str : rest) rid = this ++ that
   where
     this = [processLine pid str rid]
     that = processLines' pid rest (rid + 1)
 
-processLines :: Int -> [String] -> Regions
+processLines :: PID -> [String] -> Regions
 processLines pid l = processLines' pid l 0
 
-parseFile :: Int -> FilePath -> IO Regions
+parseFile :: PID -> FilePath -> IO Regions
 parseFile pid filepath = do
     content <- IO.readFile filepath
     let l = lines content
@@ -176,15 +174,15 @@ parseFile pid filepath = do
     return vas
 
 -- Extracts Virtual memory information from /proc/pid/maps
-getRegions :: Int -> IO Regions
+getRegions :: PID -> IO Regions
 getRegions pid = parseFile pid (mapsFile pid)
 
-getExecName :: Int -> IO String
+getExecName :: PID -> IO String
 getExecName pid = do
     execname <- P.readlink (exeFile pid)
     return execname
 
-getMapInfo :: Int -> IO MapInfo
+getMapInfo :: PID -> IO MapInfo
 getMapInfo pid = do
     reg <- getRegions pid
     execname <- getExecName pid

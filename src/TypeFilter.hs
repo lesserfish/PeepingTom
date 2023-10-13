@@ -87,10 +87,10 @@ isDouble = isType (0 :: Double)
 
 -- Filters to compare ByteString
 
-compareByteString :: (Type a) => a -> B.ByteString -> Bool
-compareByteString a bs = (toByteString a) == bs
+compareByteString :: (Type a) => B.ByteString -> a -> Bool
+compareByteString bs a = (toByteString a) == bs
 
-compareFromByteString :: (Type a) => a -> B.ByteString -> Bool
-compareFromByteString a bs = a == (fromByteString bs)
+compareFromByteString :: (Type a) => B.ByteString -> a -> Bool
+compareFromByteString bs a = a == (fromByteString bs)
 
 -- Todo: Some additional filters about sub-bytestring

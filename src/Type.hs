@@ -10,10 +10,11 @@ import qualified Data.Int as I
 import Data.Typeable
 import qualified Data.Word as W
 import qualified GHC.ByteOrder as Endian
+import Internal
 
 class (Typeable a, Show a, Eq a) => Type a where
     name :: a -> String
-    size :: a -> Int
+    size :: a -> Size
     fromByteString :: B.ByteString -> a
     toByteString :: a -> B.ByteString
 

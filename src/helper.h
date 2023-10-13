@@ -1,3 +1,5 @@
+#ifndef __HELPER
+#define __HELPER
 #include <limits.h>
 
 int get_path_max() {
@@ -7,3 +9,4 @@ int get_path_max() {
     return 4028;
 #endif
 }
+#endif

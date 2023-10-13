@@ -14,9 +14,9 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as BU
 import Foreign.C
 import Foreign.Ptr
+import Internal
+import System.Posix.Types
 import Text.Printf
-
-type FD = Int
 
 data PosixException = PosixException {exception :: String}
 instance Exception PosixException
@@ -54,8 +54,9 @@ close fd = do
 foreign import capi safe "unistd.h pwrite"
     raw_pwrite :: CInt -> Ptr a -> CSize -> CSize -> IO CSize
 
-pwrite :: FD -> B.ByteString -> Int -> Int -> IO Int
-pwrite fd raw_data count offset = do
+pwrite :: FD -> B.ByteString -> Address -> IO Int
+pwrite fd raw_data offset = do
+    let count = B.length raw_data
     let pwrite' buffer = do
             let ciFD = fromIntegral fd :: CInt
             let csBytes = fromIntegral count :: CSize
@@ -71,7 +72,7 @@ pwrite fd raw_data count offset = do
 foreign import capi safe "unistd.h pread"
     raw_pread :: CInt -> Ptr a -> CSize -> CSize -> IO CSize
 
-pread :: FD -> Int -> Int -> IO B.ByteString
+pread :: FD -> Size -> Address -> IO B.ByteString
 pread fd count offset = do
     let pread' (buffer, iBufsize) = do
             let csBufsize = fromIntegral iBufsize :: CSize
@@ -80,16 +81,16 @@ pread fd count offset = do
             ciBytes_read <- raw_pread ciFD buffer csBufsize csOffset
             let iBytes_read = fromIntegral ciBytes_read :: Int
             if (iBytes_read) < 0 then (throw $ PosixException (printf "Could not read file with PID %d. Are you sure you have the permission?" fd)) else return ()
-            bytestring <- BU.unsafePackCStringLen (buffer, iBytes_read) :: IO B.ByteString
+            bytestring <- B.packCStringLen (buffer, iBytes_read) :: IO B.ByteString
             return bytestring
-    bytestring <- withCStringLen (replicate count '\0') pread'
+    bytestring <- withCStringLen (replicate (fromIntegral count) '\0') pread'
     return bytestring
 
 -- MAX_PATH
 foreign import capi safe "helper.h get_path_max"
     raw_maxpath :: CInt
 
-maxPath :: Int
+maxPath :: Size
 maxPath = fromIntegral raw_maxpath
 
 -- readlink
@@ -105,59 +106,85 @@ readlink filepath = do
             if iBytes_read < 0 then (throw $ PosixException (printf "Could not readlink file %s." filepath)) else return ()
             output <- peekCStringLen (buffer, iBytes_read) :: IO String
             return output
-    rl <- withCString filepath (\fp -> withCStringLen (replicate maxPath '\0') (\(buf, bsize) -> readlink' fp (buf, bsize)))
+    rl <- withCString filepath (\fp -> withCStringLen (replicate (fromIntegral maxPath) '\0') (\(buf, bsize) -> readlink' fp (buf, bsize)))
     return rl
 
--- ptrace
-data PTRACE_REQUEST
-    = PTRACE_TRACEME
-    | PTRACE_PEEKTEXT
-    | PTRACE_PEEKDATA
-    | PTRACE_PEEKUSER
-    | PTRACE_POKETEXT
-    | PTRACE_POKEDATA
-    | PTRACE_POKEUSER
-    | PTRACE_CONT
-    | PTRACE_KILL
-    | PTRACE_SINGLESTEP
-    | PTRACE_GETREGS
-    | PTRACE_SETREGS
-    | PTRACE_GETFPREGS
-    | PTRACE_SETFPREGS
-    | PTRACE_ATTACH
-    | PTRACE_DETACH
-    | PTRACE_GETFPXREGS
-    | PTRACE_SETFPXREGS
-    | PTRACE_SYSCALL
-    | PTRACE_SETOPTIONS
-    | PTRACE_GETEVENTMSG
-    | PTRACE_GETSIGINFO
-    | PTRACE_SETSIGINFO
+-- kill
 
-ptrace_request :: PTRACE_REQUEST -> Int
-ptrace_request PTRACE_TRACEME = 0
-ptrace_request PTRACE_PEEKTEXT = 1
-ptrace_request PTRACE_PEEKDATA = 2
-ptrace_request PTRACE_PEEKUSER = 3
-ptrace_request PTRACE_POKETEXT = 4
-ptrace_request PTRACE_POKEDATA = 5
-ptrace_request PTRACE_POKEUSER = 6
-ptrace_request PTRACE_CONT = 7
-ptrace_request PTRACE_KILL = 8
-ptrace_request PTRACE_SINGLESTEP = 9
-ptrace_request PTRACE_GETREGS = 12
-ptrace_request PTRACE_SETREGS = 13
-ptrace_request PTRACE_GETFPREGS = 14
-ptrace_request PTRACE_SETFPREGS = 15
-ptrace_request PTRACE_ATTACH = 16
-ptrace_request PTRACE_DETACH = 17
-ptrace_request PTRACE_GETFPXREGS = 18
-ptrace_request PTRACE_SETFPXREGS = 19
-ptrace_request PTRACE_SYSCALL = 24
-ptrace_request PTRACE_SETOPTIONS = 0x4200
-ptrace_request PTRACE_GETEVENTMSG = 0x4201
-ptrace_request PTRACE_GETSIGINFO = 0x4202
-ptrace_request PTRACE_SETSIGINFO = 0x4203
+data SIGNAL
+    = SIGHUP
+    | SIGINT
+    | SIGQUIT
+    | SIGILL
+    | SIGTRAP
+    | SIGABRT
+    | SIGBUS
+    | SIGFPE
+    | SIGKILL
+    | SIGUSR1
+    | SIGSEGV
+    | SIGUSR2
+    | SIGPIPE
+    | SIGALRM
+    | SIGTERM
+    | SIGSTKFLT
+    | SIGCHLD
+    | SIGCONT
+    | SIGSTOP
+    | SIGTSTP
+    | SIGTTIN
+    | SIGTTOU
+    | SIGURG
+    | SIGXCPU
+    | SIGXFSZ
+    | SIGVTALRM
+    | SIGPROF
+    | SIGWINCH
+    | SIGPOLL
+    | SIGPWR
+    | SIGSYS
 
-foreign import capi safe "sys/ptrace.h ptrace"
-    raw_ptrace :: CInt -> CInt -> Ptr CChar -> Ptr CChar -> IO CLong
+signal :: SIGNAL -> Int
+signal SIGHUP = 1
+signal SIGINT = 2
+signal SIGQUIT = 3
+signal SIGILL = 4
+signal SIGTRAP = 5
+signal SIGABRT = 6
+signal SIGBUS = 7
+signal SIGFPE = 8
+signal SIGKILL = 9
+signal SIGUSR1 = 10
+signal SIGSEGV = 11
+signal SIGUSR2 = 12
+signal SIGPIPE = 13
+signal SIGALRM = 14
+signal SIGTERM = 15
+signal SIGSTKFLT = 16
+signal SIGCHLD = 17
+signal SIGCONT = 18
+signal SIGSTOP = 19
+signal SIGTSTP = 20
+signal SIGTTIN = 21
+signal SIGTTOU = 22
+signal SIGURG = 23
+signal SIGXCPU = 24
+signal SIGXFSZ = 25
+signal SIGVTALRM = 26
+signal SIGPROF = 27
+signal SIGWINCH = 28
+signal SIGPOLL = 29
+signal SIGPWR = 30
+signal SIGSYS = 31
+
+foreign import capi safe "signal.h kill"
+    raw_kill :: CPid -> CInt -> IO CInt
+
+kill :: PID -> SIGNAL -> IO Int
+kill pid sig = do
+    let cpid = fromIntegral pid :: CPid
+    let csig = fromIntegral (signal sig) :: CInt
+    cstatus <- raw_kill cpid csig
+    let status = fromIntegral cstatus :: Int
+    if status < 0 then (throw $ PosixException (printf "Could not send kill signal to PID %d." pid)) else return ()
+    return status
