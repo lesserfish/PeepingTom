@@ -38,22 +38,32 @@ sizeOf :: Type -> Size
 sizeOf (Type x) = sizeof x
 
 instance TypeClass Int8 where
+    {-# INLINE sizeof #-}
     sizeof _ = 1
 instance TypeClass Int16 where
+    {-# INLINE sizeof #-}
     sizeof _ = 2
 instance TypeClass Int32 where
+    {-# INLINE sizeof #-}
     sizeof _ = 4
 instance TypeClass Int64 where
+    {-# INLINE sizeof #-}
     sizeof _ = 8
 instance TypeClass UInt8 where
+    {-# INLINE sizeof #-}
     sizeof _ = 1
 instance TypeClass UInt16 where
+    {-# INLINE sizeof #-}
     sizeof _ = 2
 instance TypeClass UInt32 where
+    {-# INLINE sizeof #-}
     sizeof _ = 4
 instance TypeClass UInt64 where
+    {-# INLINE sizeof #-}
     sizeof _ = 8
 instance TypeClass Flt where
+    {-# INLINE sizeof #-}
     sizeof _ = 4
 instance TypeClass Dbl where
+    {-# INLINE sizeof #-}
     sizeof _ = 4

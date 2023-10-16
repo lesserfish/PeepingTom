@@ -78,6 +78,7 @@ i64ToBS :: Int.Int64 -> BS.ByteString
 i64ToBS
     | Endian.targetByteOrder == Endian.LittleEndian = i64ToBSle
     | otherwise = i64ToBSbe
+
 i64FromBS :: BS.ByteString -> Int.Int64
 i64FromBS
     | Endian.targetByteOrder == Endian.LittleEndian = i64FromBSle

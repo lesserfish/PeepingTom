@@ -1,8 +1,9 @@
 module Main where
 
-import PeepingTom
+import PeepingTom.State
+import System.IO
 
 main :: IO ()
 main = do
-    PeepingTom.debug
+    PeepingTom.State.debug
     return ()
