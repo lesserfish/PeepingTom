@@ -15,7 +15,7 @@ import Foreign.C
 import Foreign.Ptr
 import PeepingTom.Internal
 import System.Posix.Types
-import Text.Printf
+import Text.Printf (printf)
 
 data PosixException = PosixException {exception :: String}
 instance Exception PosixException

@@ -8,9 +8,7 @@ import qualified Data.Binary.Get as BG
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.Int as Int
 import Data.Typeable
-import qualified Data.Word as UInt
 import qualified GHC.ByteOrder as Endian
 import PeepingTom.Internal
 
@@ -18,11 +16,11 @@ class (Typeable a, Show a) => TypeClass a where
     sizeof :: a -> Size
 
 data Type = forall a. (TypeClass a) => Type a
-type Filter = BS.ByteString -> Type -> Bool
 
 instance Show Type where
     show (Type x) = show x
 
+data Void = Void deriving (Show, Typeable)
 data Int8 = Int8 deriving (Show, Typeable)
 data Int16 = Int16 deriving (Show, Typeable)
 data Int32 = Int32 deriving (Show, Typeable)
@@ -34,9 +32,12 @@ data UInt64 = UInt64 deriving (Show, Typeable)
 data Flt = Flt deriving (Show, Typeable)
 data Dbl = Dbl deriving (Show, Typeable)
 
+{-# INLINE sizeOf #-}
 sizeOf :: Type -> Size
 sizeOf (Type x) = sizeof x
 
+instance TypeClass Void where
+    sizeof _ = 0
 instance TypeClass Int8 where
     {-# INLINE sizeof #-}
     sizeof _ = 1

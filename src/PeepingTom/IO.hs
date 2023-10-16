@@ -3,8 +3,6 @@
 
 module PeepingTom.IO where
 
-import Control.DeepSeq
-import Control.Exception (evaluate)
 import qualified Data.ByteString as BS
 import GHC.Generics
 import PeepingTom.Internal
@@ -96,19 +94,46 @@ loadMemoryChunk fd addr chunk_size = do
     chunk <- Posix.pread fd chunk_size addr
     return $ MemoryChunk addr chunk_size chunk
 
--- Read
+-- Read / Write
 
-{-
-updateCandidate :: [Candidate] -> MemoryChunk -> IO [Candidate]
-updateCandidate [] = []
-updateCandidate (current : rest) memory_chunk = do
-    tail <- updateCandidate rest memory_chunk
-    if current_inside memory_chunk
-        then do
-            read from chunk
-            update candidate
-            return [new_candidate] ++ tail
-        else do
-            new_chunk <- from_candidate_addr
-            return updateCandidate (current : rest) new_chunk
--}
+type WInterface = (Address -> BS.ByteString -> IO ())
+type RInterface = (Address -> Size -> IO BS.ByteString)
+
+writeInterface :: FD -> WInterface
+writeInterface fd addr bs = do
+    _ <- Posix.pwrite fd bs addr -- TODO: Handle errors in here maybe?
+    return ()
+
+withWInterface :: PID -> (WInterface -> IO a) -> IO a
+withWInterface pid action = do
+    fd <- attach pid Posix.O_WRONLY
+    let winterface = writeInterface fd
+    output <- action winterface
+    dettach (pid, fd)
+    return output
+
+readInterface :: FD -> RInterface
+readInterface fd addr size = do
+    bs <- Posix.pread fd size addr
+    return bs
+
+withRInterface :: PID -> (RInterface -> IO a) -> IO a
+withRInterface pid action = do
+    fd <- attach pid Posix.O_RDONLY
+    let rinterface = readInterface fd
+    output <- action rinterface
+    dettach (pid, fd)
+    return output
+
+type CInterface = Address -> Size -> IO MemoryChunk
+
+chunkInterface :: FD -> CInterface
+chunkInterface fd addr size = loadMemoryChunk fd addr size
+
+withCInterface :: PID -> (CInterface -> IO a) -> IO a
+withCInterface pid action = do
+    fd <- attach pid Posix.O_RDONLY
+    let cinterface = chunkInterface fd
+    output <- action cinterface
+    dettach (pid, fd)
+    return output

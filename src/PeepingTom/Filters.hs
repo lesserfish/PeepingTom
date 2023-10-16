@@ -8,6 +8,8 @@ import Data.Typeable (Typeable, typeOf)
 import PeepingTom.Conversions
 import PeepingTom.Type
 
+type Filter = BS.ByteString -> Type -> Bool
+
 isType :: (Typeable a) => a -> Type -> Bool
 isType a (Type b) = typeOf a == typeOf b
 
