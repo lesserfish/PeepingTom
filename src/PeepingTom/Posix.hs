@@ -7,7 +7,17 @@
 -- These functions also throw HARD errors on failure, so they are NOT suitable for usage in anything more complex than PeepingTom.
 -- (In fact, I should probably avoid these hard errors)
 
-module PeepingTom.Posix where
+module PeepingTom.Posix (
+    open,
+    close,
+    pwrite,
+    pread,
+    readlink,
+    kill,
+    ACCESS_MODE (..),
+    PosixException (..),
+    SIGNAL (..),
+) where
 
 import Control.Exception
 import qualified Data.ByteString as BS

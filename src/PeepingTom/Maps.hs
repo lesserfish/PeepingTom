@@ -8,7 +8,6 @@ module PeepingTom.Maps (
     MapID (..),
     Region (..),
     MapInfo (..),
-    getRegions,
     getMapInfo,
     filterMap,
     filterRW,
@@ -31,7 +30,6 @@ data S = S | P deriving (Show)
 data Permission = Permission {r :: R, w :: W, x :: X, s :: S}
 data MapID = MapID {majorID :: Int, minorID :: Int, inodeID :: Int}
 data Region = Region {rStartAddr :: Address, rEndAddr :: Address, rPermission :: Permission, rOffset :: Address, rMapID :: MapID, rFP :: FilePath, rID :: Int, rPID :: PID}
-
 data MapInfo = MapInfo {miRegions :: [Region], miPID :: PID, miExecutableName :: String}
 
 showRegions :: [Region] -> String

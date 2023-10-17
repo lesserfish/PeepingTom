@@ -1,4 +1,10 @@
-module PeepingTom.IO where
+module PeepingTom.IO (
+    MemoryChunk (..),
+    RInterface,
+    WInterface,
+    withWInterface,
+    withRInterface,
+) where
 
 import qualified Data.ByteString as BS
 import PeepingTom.Internal

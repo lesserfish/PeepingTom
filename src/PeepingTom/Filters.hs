@@ -1,4 +1,20 @@
-module PeepingTom.Filters where
+module PeepingTom.Filters (
+    Filter,
+    isI8,
+    isI16,
+    isI32,
+    isI64,
+    isU8,
+    isU16,
+    isU32,
+    isU64,
+    isFlt,
+    isDbl,
+    eqInteger,
+    eqBS,
+    compareBS,
+    compareInteger,
+) where
 
 import qualified Data.ByteString as BS
 import Data.Functor ((<$>))
@@ -71,8 +87,11 @@ compareInteger :: (Integer -> Bool) -> Filter
 compareInteger fltr bs t = fromMaybe False (compareInteger' fltr bs t)
 
 -- ByteString
-compareBS :: BS.ByteString -> Filter
-compareBS bs1 bs2 _ = bs1 == bs2
+eqBS :: BS.ByteString -> Filter
+eqBS bs1 bs2 _ = bs1 == bs2
+
+compareBS :: (BS.ByteString -> Bool) -> Filter
+compareBS fltr bs2 _ = fltr bs2
 
 -- TypeData: Comparisons with a given Type and a ByteString
 data TypeData = TypeData {aType :: Type, aData :: BS.ByteString}

@@ -1,4 +1,13 @@
-module PeepingTom.State where
+module PeepingTom.State (
+    Candidate (..),
+    PeepState (..),
+    showState,
+    applyFilter,
+    updateState,
+    applyWriter,
+    scanMapS,
+    scanMap,
+) where
 
 import Control.Exception
 import Control.Monad (forM)

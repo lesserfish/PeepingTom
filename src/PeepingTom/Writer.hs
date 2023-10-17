@@ -1,4 +1,7 @@
-module PeepingTom.Writer where
+module PeepingTom.Writer (
+    Writer,
+    writeInt,
+) where
 
 import qualified Data.ByteString as BS
 import qualified PeepingTom.Conversions as Conversions

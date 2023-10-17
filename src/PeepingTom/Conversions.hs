@@ -1,4 +1,21 @@
-module PeepingTom.Conversions where
+module PeepingTom.Conversions (
+    i8ToBS,
+    i8FromBS,
+    i16ToBS,
+    i16FromBS,
+    i32ToBS,
+    i32FromBS,
+    i64ToBS,
+    i64FromBS,
+    u8ToBS,
+    u8FromBS,
+    u16ToBS,
+    u16FromBS,
+    u32ToBS,
+    u32FromBS,
+    u64ToBS,
+    u64FromBS,
+) where
 
 import qualified Data.Binary.Get as BG
 import qualified Data.ByteString as BS

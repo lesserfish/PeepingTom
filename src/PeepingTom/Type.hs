@@ -2,7 +2,22 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
-module PeepingTom.Type where
+module PeepingTom.Type (
+    Type (..),
+    TypeClass,
+    Void (..),
+    Int8 (..),
+    Int16 (..),
+    Int32 (..),
+    Int64 (..),
+    UInt8 (..),
+    UInt16 (..),
+    UInt32 (..),
+    UInt64 (..),
+    Flt (..),
+    Dbl (..),
+    sizeOf,
+) where
 
 import qualified Data.Binary.Get as BG
 import qualified Data.ByteString as BS
