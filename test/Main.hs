@@ -11,6 +11,7 @@ import qualified PeepingTom.State as State
 import qualified PeepingTom.Type as Type
 import qualified PeepingTom.Writer as Writer
 import System.Environment
+import System.Exit
 import Text.Printf (printf)
 
 foreign import capi safe "PeepingTom-test.h create_process"
@@ -120,19 +121,23 @@ test3 = do
             )
     return status
 
+test :: Int -> IO ()
+test 1 = do
+    ok <- test1
+    if ok then return () else exitWith (ExitFailure 1)
+test 2 = do
+    ok <- test2
+    if ok then return () else exitWith (ExitFailure 1)
+test 3 = do
+    ok <- test3
+    if ok then return () else exitWith (ExitFailure 1)
+test _ = return ()
+
 testall :: IO ()
 testall = do
-    _ <- test1
-    _ <- test2
-    _ <- test3
-    return ()
-test :: Int -> IO Bool
-test 1 = test1
-test 2 = test2
-test 3 = test3
-test _ = do
-    putStrLn $ "Test does not exist!"
-    return False
+    test 1
+    test 2
+    test 3
 
 main :: IO ()
 main = do
