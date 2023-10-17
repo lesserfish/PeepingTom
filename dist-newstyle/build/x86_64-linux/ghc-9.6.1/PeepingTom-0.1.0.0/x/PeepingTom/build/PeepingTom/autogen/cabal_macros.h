@@ -10,6 +10,16 @@
   (major1) == 0 && (major2) <  1 || \
   (major1) == 0 && (major2) == 1 && (minor) <= 0)
 #endif /* MIN_VERSION_PeepingTom */
+/* package PeepingTom-0.1.0.0 */
+#ifndef VERSION_PeepingTom
+#define VERSION_PeepingTom "0.1.0.0"
+#endif /* VERSION_PeepingTom */
+#ifndef MIN_VERSION_PeepingTom
+#define MIN_VERSION_PeepingTom(major1,major2,minor) (\
+  (major1) <  0 || \
+  (major1) == 0 && (major2) <  1 || \
+  (major1) == 0 && (major2) == 1 && (minor) <= 0)
+#endif /* MIN_VERSION_PeepingTom */
 /* package base-4.18.0.0 */
 #ifndef VERSION_base
 #define VERSION_base "4.18.0.0"
@@ -20,66 +30,6 @@
   (major1) == 4 && (major2) <  18 || \
   (major1) == 4 && (major2) == 18 && (minor) <= 0)
 #endif /* MIN_VERSION_base */
-/* package binary-0.8.9.1 */
-#ifndef VERSION_binary
-#define VERSION_binary "0.8.9.1"
-#endif /* VERSION_binary */
-#ifndef MIN_VERSION_binary
-#define MIN_VERSION_binary(major1,major2,minor) (\
-  (major1) <  0 || \
-  (major1) == 0 && (major2) <  8 || \
-  (major1) == 0 && (major2) == 8 && (minor) <= 9)
-#endif /* MIN_VERSION_binary */
-/* package bytestring-0.11.4.0 */
-#ifndef VERSION_bytestring
-#define VERSION_bytestring "0.11.4.0"
-#endif /* VERSION_bytestring */
-#ifndef MIN_VERSION_bytestring
-#define MIN_VERSION_bytestring(major1,major2,minor) (\
-  (major1) <  0 || \
-  (major1) == 0 && (major2) <  11 || \
-  (major1) == 0 && (major2) == 11 && (minor) <= 4)
-#endif /* MIN_VERSION_bytestring */
-/* package deepseq-1.4.8.1 */
-#ifndef VERSION_deepseq
-#define VERSION_deepseq "1.4.8.1"
-#endif /* VERSION_deepseq */
-#ifndef MIN_VERSION_deepseq
-#define MIN_VERSION_deepseq(major1,major2,minor) (\
-  (major1) <  1 || \
-  (major1) == 1 && (major2) <  4 || \
-  (major1) == 1 && (major2) == 4 && (minor) <= 8)
-#endif /* MIN_VERSION_deepseq */
-/* package mtl-2.3.1 */
-#ifndef VERSION_mtl
-#define VERSION_mtl "2.3.1"
-#endif /* VERSION_mtl */
-#ifndef MIN_VERSION_mtl
-#define MIN_VERSION_mtl(major1,major2,minor) (\
-  (major1) <  2 || \
-  (major1) == 2 && (major2) <  3 || \
-  (major1) == 2 && (major2) == 3 && (minor) <= 1)
-#endif /* MIN_VERSION_mtl */
-/* package parallel-3.2.2.0 */
-#ifndef VERSION_parallel
-#define VERSION_parallel "3.2.2.0"
-#endif /* VERSION_parallel */
-#ifndef MIN_VERSION_parallel
-#define MIN_VERSION_parallel(major1,major2,minor) (\
-  (major1) <  3 || \
-  (major1) == 3 && (major2) <  2 || \
-  (major1) == 3 && (major2) == 2 && (minor) <= 2)
-#endif /* MIN_VERSION_parallel */
-/* package split-0.2.4 */
-#ifndef VERSION_split
-#define VERSION_split "0.2.4"
-#endif /* VERSION_split */
-#ifndef MIN_VERSION_split
-#define MIN_VERSION_split(major1,major2,minor) (\
-  (major1) <  0 || \
-  (major1) == 0 && (major2) <  2 || \
-  (major1) == 0 && (major2) == 2 && (minor) <= 4)
-#endif /* MIN_VERSION_split */
 
 /* tool gcc-11 */
 #ifndef TOOL_VERSION_gcc

@@ -1,39 +1,47 @@
-cabal-version:      3.0
-name:               PeepingTom
-version:            0.1.0.0
--- synopsis:
--- description:
-license:            MIT
-license-file:       LICENSE
-author:             lesserfish
-maintainer:         lesserfish@pm.me
--- copyright:
-category:           System
-build-type:         Simple
-extra-doc-files:    CHANGELOG.md
+cabal-version: 3.0
+name: PeepingTom
+version: 0.1.0.0
+license: MIT
+license-file: LICENSE
+author: lesserfish
+maintainer: lesserfish@pm.me
+category: System
+build-type: Simple
+extra-doc-files: CHANGELOG.md
 extra-source-files: src/PeepingTom/helper.h
 
 common warnings
-    ghc-options:
--- -Wall
+  ghc-options:
+  -Wall
 
-
+library
+  exposed-modules: PeepingTom.Maps, PeepingTom.Posix, PeepingTom.Type, PeepingTom.State, PeepingTom.IO, PeepingTom.Filters, PeepingTom.Internal, PeepingTom.Conversions, PeepingTom.Writer
+  build-depends:    base >= 4.18.0.0,
+                    bytestring >= 0.11.4.0,
+                    split >= 0.2.3.5,
+                    binary >= 0.8.9.1,
+                    mtl >= 2.3.1
+  hs-source-dirs: src
+  default-language: Haskell2010
 
 executable PeepingTom
-    import:           warnings
-    main-is:          Main.hs
-    other-modules:  PeepingTom.Maps, PeepingTom.Posix, PeepingTom.Type, PeepingTom.State, PeepingTom.IO, PeepingTom.Filters, PeepingTom.Internal, PeepingTom.Conversions, PeepingTom.Writer
-    -- other-extensions:
-    build-depends:    base >= 4.18.0.0,
-                      bytestring >= 0.11.4.0,
-                      split >= 0.2.3.5,
-                      binary >= 0.8.9.1,
-                      mtl >= 2.3.1,
-                      deepseq >= 1.4.4.0,
-                      parallel >= 3.2.2.0
+  main-is: Main.hs
+  build-depends: base >= 4.18.0.0, PeepingTom
+  hs-source-dirs: app
+  default-language: Haskell2010
+  ghc-options: -O3
 
-    hs-source-dirs:   src
+test-suite PeepingTom-test
+    import:           warnings
     default-language: Haskell2010
-    ghc-options: -O3
---fobject-code 
---O2 -prof -fprof-auto -rtsopts
+    -- other-modules:
+    -- other-extensions:
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   test
+    main-is:          Main.hs
+    build-depends:
+        base >= 4.18.0.0,
+        PeepingTom
+    extra-include-dirs: test/scanmem/
+    extra-lib-dirs: test/scanmem/build/.libs/
+    extra-libraries: scanmem
