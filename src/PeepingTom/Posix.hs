@@ -83,6 +83,7 @@ pread fd count offset = do
             bytestring <- BS.packCStringLen (buffer, iBytes_read) :: IO BS.ByteString
             return bytestring
     bytestring <- withCStringLen (replicate (fromIntegral count) '\0') pread'
+    evaluate bytestring
     return bytestring
 
 -- MAX_PATH

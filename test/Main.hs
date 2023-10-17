@@ -70,7 +70,7 @@ test1 = do
                 all_maps <- Maps.getMapInfo pid
                 let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
                 let fltr = Filters.eqInteger 49
-                state <- State.scanMap [(Type.Type Type.Int64)] fltr maps
+                state <- State.scanMap2 [(Type.Type Type.Int64)] fltr maps
                 pause_process pid
                 let peeptom_matches = length . State.pCandidates $ state
                 scanmem_matches <- get_matches pid 49
@@ -89,7 +89,7 @@ test2 = do
                 all_maps <- Maps.getMapInfo pid
                 let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
                 let fltr = Filters.eqInteger 49
-                state <- State.scanMap [(Type.Type Type.Int64)] fltr maps
+                state <- State.scanMap2 [(Type.Type Type.Int64)] fltr maps
                 putStrLn $ printf "Second test:\n"
                 _ <- State.applyWriter (Writer.writeInt 3) state
                 scanmem_matches <- get_matches pid 49
@@ -107,7 +107,7 @@ test3 = do
                 all_maps <- Maps.getMapInfo pid
                 let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
                 let fltr = Filters.eqInteger 49
-                state <- State.scanMap [(Type.Type Type.Int64)] fltr maps
+                state <- State.scanMap2 [(Type.Type Type.Int64)] fltr maps
                 pause_process pid
                 update_values pid 49 0
                 updated_state <- State.updateState 4096 state
@@ -120,6 +120,12 @@ test3 = do
             )
     return status
 
+testall :: IO ()
+testall = do
+    _ <- test1
+    _ <- test2
+    _ <- test3
+    return ()
 test :: Int -> IO Bool
 test 1 = test1
 test 2 = test2
@@ -133,7 +139,7 @@ main = do
     _ <- c_init_scanmem
     args <- getArgs
     case args of
-        [] -> putStrLn "Please provide a valid test (1..3)"
+        [] -> testall
         (arg : _) -> do
             let maybeInt = safeRead arg :: Maybe Int
             case maybeInt of

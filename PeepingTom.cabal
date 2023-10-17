@@ -29,7 +29,9 @@ executable PeepingTom
   build-depends: base >= 4.18.0.0, PeepingTom
   hs-source-dirs: app
   default-language: Haskell2010
-  ghc-options: -O3
+  ghc-options: 
+
+--O2 -prof -fprof-auto -rtsopts
 
 test-suite PeepingTom-test
     import:           warnings

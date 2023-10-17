@@ -6,7 +6,7 @@ check:
 	LD_LIBRARY_PATH="/home/lesserfish/Documents/Code/PeepingTom/test/scanmem/build/.libs/:$$LD_LIBRARY_PATH" cabal test
 run-test:
 	@if [ -z "$(test)" ]; then \
-        echo "Please provide an argument. Example: make run-test test=1"; \
+        LD_LIBRARY_PATH="/home/lesserfish/Documents/Code/PeepingTom/test/scanmem/build/.libs/:$$LD_LIBRARY_PATH" cabal run PeepingTom-test; \
     else \
         LD_LIBRARY_PATH="/home/lesserfish/Documents/Code/PeepingTom/test/scanmem/build/.libs/:$$LD_LIBRARY_PATH" cabal run PeepingTom-test -- "$(test)"; \
     fi
