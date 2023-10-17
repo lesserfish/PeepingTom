@@ -27,9 +27,9 @@ data Candidate = Candidate
     }
 
 data PeepState = PeepState
-    { pPID :: PID
-    , pCandidates :: [Candidate]
-    , pRegions :: Maps.MapInfo
+    { psPID :: PID
+    , psCandidates :: [Candidate]
+    , psRegions :: Maps.MapInfo
     }
 
 instance Show Candidate where
@@ -37,7 +37,7 @@ instance Show Candidate where
         printf
             "Address: 0x%08X\tData: [%s]\tPossible Types: %s\tRegion ID: %d"
             (cAddress $ candidate)
-            (bsToHex $ cData candidate)
+            (bsToString $ cData candidate)
             (show . cTypes $ candidate)
             (cRegionID candidate)
 
@@ -46,11 +46,11 @@ instance Show PeepState where
 
 -- Private Methods
 
-bsToHex :: BS.ByteString -> String
-bsToHex bs = concat $ intersperse " " (fmap (printf "0x%02X") (BS.unpack bs))
+bsToString :: BS.ByteString -> String
+bsToString bs = concat $ intersperse " " (fmap (printf "0x%02X") (BS.unpack bs))
 
-printList :: (Show a) => [a] -> String
-printList lst = concat $ intersperse "\n" (fmap show lst)
+showList :: (Show a) => [a] -> String
+showList lst = concat $ intersperse "\n" (fmap show lst)
 
 slice :: Address -> Address -> BS.ByteString -> BS.ByteString
 slice start len = BS.take len . BS.drop start
@@ -70,42 +70,6 @@ maxType (t : rest)
     | sizeOf t < sizeOf (maxType rest) = (maxType rest)
     | otherwise = t
 
-filterRegion :: [Type] -> Filters.Filter -> IO.RegionData -> Address -> Maybe Candidate
-filterRegion types fltr regdata offset = output
-  where
-    address = (Maps.startAddress . IO.rInfo $ regdata) + offset
-    bytes = BS.drop offset (IO.rData regdata) -- Get all the bytes starting from offset
-    candidate_types = filter (fltr bytes) types :: [Type]
-    max_size = maxSizeOf candidate_types
-    byte_data = BS.take max_size bytes -- Store this amount of bytes
-    region_id = Maps.regionID . IO.rInfo $ regdata
-    new_candidate =
-        Candidate
-            { cAddress = address
-            , cData = byte_data
-            , cTypes = candidate_types
-            , cRegionID = region_id
-            }
-    output = if length candidate_types == 0 then Nothing else Just new_candidate
-
-regionScan :: [Type] -> Filters.Filter -> IO.RegionData -> [Candidate]
-regionScan types fltr regdata = mapMaybe (filterRegion types fltr regdata) offsets
-  where
-    offsets = [0 .. (end_addr - start_addr)]
-    start_addr = (Maps.startAddress . IO.rInfo $ regdata)
-    end_addr = (Maps.endAddress . IO.rInfo $ regdata)
-
-scanMap' :: [Type] -> Filters.Filter -> Maps.MapInfo -> IO [Candidate]
-scanMap' types fltr map = do
-    regions <- IO.loadMap map
-    let action = vocal regionScanLog (\x -> return $ regionScan types fltr x)
-    fc <- forM regions action :: IO [[Candidate]]
-    return $ concat fc
-
-regionScanLog :: IO.RegionData -> [Candidate] -> IO ()
-regionScanLog reg result = do
-    if length result == 0 then return () else putStrLn $ printf "Extracted %4d candidates from Region %4d (size = %8x)" (length result) (Maps.regionID . IO.rInfo $ reg) ((Maps.endAddress . IO.rInfo $ reg) - (Maps.startAddress . IO.rInfo $ reg))
-
 candidateFilter :: Filters.Filter -> Candidate -> Maybe Candidate
 candidateFilter fltr candidate = output
   where
@@ -122,35 +86,89 @@ isInChunk candidate chunk = (candidate_addr >= chunk_addr) && (candidate_addr + 
     candidate_addr = cAddress candidate
     candidate_types = cTypes candidate
     max_size = maxSizeOf candidate_types
-    chunk_addr = IO.startAddress chunk
-    chunk_size = IO.chunkSize chunk
+    chunk_addr = IO.mcStartAddr chunk
+    chunk_size = IO.mcSize chunk
 
-updateCandidates' :: IO.CInterface -> [Candidate] -> IO.MemoryChunk -> IO [Candidate]
-updateCandidates' _ [] _ = return []
-updateCandidates' cinterface (current : rest) memory_chunk = do
+filterChunk :: [Type] -> Filters.Filter -> Int -> IO.MemoryChunk -> Address -> Maybe Candidate
+filterChunk types fltr regid chunk offset = output
+  where
+    address = (IO.mcStartAddr chunk) + offset
+    bytes = BS.drop offset (IO.mcData chunk) -- Get all the bytes starting from offset
+    candidate_types = filter (fltr bytes) types :: [Type]
+    max_size = maxSizeOf candidate_types
+    byte_data = BS.take max_size bytes -- Store this amount of bytes
+    region_id = regid
+    new_candidate =
+        Candidate
+            { cAddress = address
+            , cData = byte_data
+            , cTypes = candidate_types
+            , cRegionID = region_id
+            }
+    output = if length candidate_types == 0 then Nothing else Just new_candidate
+
+regionScanHelper :: IO.RInterface -> [Type] -> Filters.Filter -> Size -> (Address, Address) -> Int -> IO [Candidate]
+regionScanHelper rinterface types fltr regid (start_address, end_address) chunk_size = do
+    if start_address >= end_address
+        then return []
+        else do
+            let max_size = maxSizeOf types
+            let offset_size = min (end_address - start_address) chunk_size
+            let read_size = min (end_address - start_address) (chunk_size + max_size)
+            let offset = [0 .. offset_size]
+            tail <- regionScanHelper rinterface types fltr regid (start_address + offset_size, end_address) chunk_size
+            chunk <- rinterface start_address read_size
+            let candidates = mapMaybe (filterChunk types fltr regid chunk) offset
+            evaluate candidates
+            return $ candidates ++ tail
+
+regionScan :: [Type] -> Filters.Filter -> Maps.Region -> Size -> IO [Candidate]
+regionScan types fltr region chunk_size = do
+    let pid = Maps.rPID region
+    let rid = Maps.rID region
+    let sa = Maps.rStartAddr region
+    let ea = Maps.rEndAddr region
+    let action = (\rinterface -> regionScanHelper rinterface types fltr rid (sa, ea) chunk_size) :: IO.RInterface -> IO [Candidate]
+    candidates <- IO.withRInterface pid action
+    return candidates
+
+regionScanLog :: Maps.Region -> [Candidate] -> IO ()
+regionScanLog reg result = do
+    if length result == 0 then return () else putStrLn $ printf "Extracted %4d candidates from Region %4d (size = %8x)" (length result) (Maps.rID reg) ((Maps.rEndAddr reg) - (Maps.rStartAddr reg))
+
+scanMapHelper :: Size -> [Type] -> Filters.Filter -> Maps.MapInfo -> IO [Candidate]
+scanMapHelper chunk_size types fltr map = do
+    let regions = Maps.miRegions map
+    let action = vocal regionScanLog (\x -> regionScan types fltr x chunk_size) :: Maps.Region -> IO [Candidate]
+    fc <- forM regions action :: IO [[Candidate]]
+    return $ concat fc
+
+updateCandidatesHelper :: IO.RInterface -> [Candidate] -> IO.MemoryChunk -> IO [Candidate]
+updateCandidatesHelper _ [] _ = return []
+updateCandidatesHelper rinterface (current : rest) memory_chunk = do
     if (isInChunk current memory_chunk)
         then do
-            let offset = (cAddress current) - (IO.startAddress memory_chunk) -- Get the offset of the memory location in the bytestring corresponding to address
+            let offset = (cAddress current) - (IO.mcStartAddr memory_chunk) -- Get the offset of the memory location in the bytestring corresponding to address
             let valid_types = cTypes current
             let byte_counts = map sizeOf valid_types
             let byte_count = foldl max 0 byte_counts
-            let new_bytes = slice offset byte_count (IO.mData memory_chunk)
+            let new_bytes = slice offset byte_count (IO.mcData memory_chunk)
             let new_candidate = current{cData = new_bytes}
-            tail <- updateCandidates' cinterface rest memory_chunk
+            tail <- updateCandidatesHelper rinterface rest memory_chunk
             return $ [new_candidate] ++ tail
         else do
             let new_chunk_addr = cAddress current
-            let chunk_size = IO.chunkSize memory_chunk
-            new_chunk <- cinterface new_chunk_addr chunk_size
-            updateCandidates' cinterface (current : rest) new_chunk
+            let chunk_size = IO.mcSize memory_chunk
+            new_chunk <- rinterface new_chunk_addr chunk_size
+            updateCandidatesHelper rinterface (current : rest) new_chunk
 
-updateCandidates :: IO.CInterface -> Int -> [Candidate] -> IO [Candidate]
+updateCandidates :: IO.RInterface -> Int -> [Candidate] -> IO [Candidate]
 updateCandidates _ _ [] = return []
-updateCandidates cinterface chunk_size candidates = do
+updateCandidates rinterface chunk_size candidates = do
     let initial = candidates !! 0
     let new_chunk_addr = cAddress initial
-    chunk <- cinterface new_chunk_addr chunk_size
-    updateCandidates' cinterface candidates chunk
+    chunk <- rinterface new_chunk_addr chunk_size
+    updateCandidatesHelper rinterface candidates chunk
 
 writeCandidate :: IO.WInterface -> Writer.Writer -> Candidate -> IO Candidate
 writeCandidate winterface writer candidate = do
@@ -165,141 +183,55 @@ writeCandidate winterface writer candidate = do
             let candidate' = candidate{cData = bs_data}
             return candidate'
 
-applyWriter' :: IO.WInterface -> Writer.Writer -> [Candidate] -> IO [Candidate]
-applyWriter' winterface writer candidates = sequence $ map (writeCandidate winterface writer) candidates
+applyWriterHelper :: IO.WInterface -> Writer.Writer -> [Candidate] -> IO [Candidate]
+applyWriterHelper winterface writer candidates = sequence $ map (writeCandidate winterface writer) candidates
 
 -- Public Methods
 
 showState :: Int -> Int -> PeepState -> String
-showState maxcandidates maxregions ps =
-    printf "PID: %d\n" (pPID ps)
-        ++ printf "Regions (%d): \n\n%s\n%s\n" (length . Maps.regions . pRegions $ ps) rstr rdot
-        ++ printf "Candidates (%d): \n\n%s\n%s\n" (length . pCandidates $ ps) cstr cdot
+showState maxcandidates' maxregions' ps =
+    printf "PID: %d\n" (psPID ps)
+        ++ printf "Regions (%d): \n\n%s\n%s\n" (length . Maps.miRegions . psRegions $ ps) rstr rdot
+        ++ printf "Candidates (%d): \n\n%s\n%s\n" (length . psCandidates $ ps) cstr cdot
   where
-    candidate_list = take maxcandidates (pCandidates ps)
+    maxcandidates = if maxcandidates < 0 then (length . psCandidates $ ps) else maxcandidates'
+    maxregions = if maxregions' < 0 then (length . Maps.miRegions . psRegions $ ps) else maxregions'
+    candidate_list = take maxcandidates (psCandidates ps)
     cstrlist = fmap show candidate_list
     cstr = concat $ intersperse "\n" cstrlist
-    cdot = if (length . pCandidates $ ps) > maxcandidates then "...\n" else ""
-    region_list = pRegions ps
-    rstrlist = fmap show (take maxregions $ Maps.regions region_list)
+    cdot = if (length . psCandidates $ ps) > maxcandidates then "...\n" else ""
+    region_list = psRegions ps
+    rstrlist = fmap show (take maxregions $ Maps.miRegions region_list)
     rstr = concat $ intersperse "\n" rstrlist
-    rdot = if (length . Maps.regions $ region_list) > maxregions then "...\n" else ""
+    rdot = if (length . Maps.miRegions $ region_list) > maxregions then "...\n" else ""
 
 applyFilter :: Filters.Filter -> PeepState -> PeepState
 applyFilter fltr state = output
   where
-    candidates' = mapMaybe (candidateFilter fltr) (pCandidates state)
-    output = state{pCandidates = candidates'}
+    candidates' = mapMaybe (candidateFilter fltr) (psCandidates state)
+    output = state{psCandidates = candidates'}
 
 updateState :: Size -> PeepState -> IO PeepState
 updateState chunk_size state = do
-    let pid = pPID state
-    let candidates = pCandidates state
-    let action = (\cinterface -> updateCandidates cinterface chunk_size candidates) :: IO.CInterface -> IO [Candidate]
-    candidates' <- IO.withCInterface pid action
-    return $ state{pCandidates = candidates'}
-
-scanMap :: [Type] -> Filters.Filter -> Maps.MapInfo -> IO PeepState
-scanMap types fltr map = do
-    let pid = (Maps.mPID map)
-    candidates <- scanMap' types fltr map
-    return PeepState{pPID = pid, pCandidates = candidates, pRegions = map}
+    let pid = psPID state
+    let candidates = psCandidates state
+    let action = (\rinterface -> updateCandidates rinterface chunk_size candidates) :: IO.RInterface -> IO [Candidate]
+    candidates' <- IO.withRInterface pid action
+    return $ state{psCandidates = candidates'}
 
 applyWriter :: Writer.Writer -> PeepState -> IO PeepState
 applyWriter writer peepstate = do
-    let pid = pPID peepstate
-    let candidates = pCandidates peepstate
-    let action = (\winterface -> applyWriter' winterface writer candidates) :: (IO.WInterface -> IO [Candidate])
+    let pid = psPID peepstate
+    let candidates = psCandidates peepstate
+    let action = (\winterface -> applyWriterHelper winterface writer candidates) :: (IO.WInterface -> IO [Candidate])
     candidates' <- IO.withWInterface pid action
-    return $ peepstate{pCandidates = candidates'}
+    return $ peepstate{psCandidates = candidates'}
 
-debug :: IO ()
-debug = do
-    let pid = 13610 :: PID
-    putStrLn $ printf "PID: %d" pid
-    all_maps <- Maps.getMapInfo pid
-    let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
-    let fltr_41 = Filters.eqInteger 41
-    peepstate <- scanMap2 [(Type Int64)] fltr_41 maps
-    putStrLn $ "[DEBUG] This is the initial extraction of Int64 Types equal to 41"
-    putStrLn $ "[DEBUG] Please compare this result with scanmem!"
-    putStrLn $ showState 5 0 peepstate
+scanMapS :: Size -> [Type] -> Filters.Filter -> Maps.MapInfo -> IO PeepState
+scanMapS chunk_size types fltr map = do
+    let pid = (Maps.miPID map)
+    candidates <- scanMapHelper chunk_size types fltr map
+    return PeepState{psPID = pid, psCandidates = candidates, psRegions = map}
 
-    putStrLn $ "[DEBUG] After the results have been checked, please alter the candidates 0..200 to value 43! Please enter once complete...."
-    _ <- getChar
-    putStrLn $ "[DEBUG] We are now showing the candidates which still have value equal 41. Please compare the results with scanmem!"
-    peepstate2 <- updateState 4096 peepstate
-    let peepstate41 = applyFilter fltr_41 peepstate2
-    putStrLn $ showState 5 0 peepstate41
-    putStrLn $ "[DEBUG] We are now showing the candidates which have a value equal to 43. Please compare the results with scanmem! Please enter once complete!"
-    let peepstate43 = applyFilter (Filters.eqInteger 43) peepstate2
-    putStrLn $ showState 5 0 peepstate43
-    _ <- getChar
-    putStrLn $ "[DEBUG] We are now updating the candidates with value equal to 43. We are setting the new value equal to 45! Press enter to continue:"
-    _ <- getChar
-    peepstate45 <- applyWriter (Writer.writeInt 45) peepstate43
-    putStrLn $ "[DEBUG] This is the result after updating the values! Please compare the results with scanmem!"
-    putStrLn $ showState 5 0 peepstate45
-    _ <- getChar
-    putStrLn $ "[DEBUG] This is the end of the Debug! Please set all of the remaining candidates in scanmem equal to 41. Hope it worked out!"
-    _ <- getChar
-    return ()
-
-filterChunk :: [Type] -> Filters.Filter -> Int -> IO.MemoryChunk -> Address -> Maybe Candidate
-filterChunk types fltr regid chunk offset = output
-  where
-    address = (IO.startAddress chunk) + offset
-    bytes = BS.drop offset (IO.mData chunk) -- Get all the bytes starting from offset
-    candidate_types = filter (fltr bytes) types :: [Type]
-    max_size = maxSizeOf candidate_types
-    byte_data = BS.take max_size bytes -- Store this amount of bytes
-    region_id = regid
-    new_candidate =
-        Candidate
-            { cAddress = address
-            , cData = byte_data
-            , cTypes = candidate_types
-            , cRegionID = region_id
-            }
-    output = if length candidate_types == 0 then Nothing else Just new_candidate
-
-scanRegionByChunks' :: IO.CInterface -> [Type] -> Filters.Filter -> (Address, Address) -> Int -> IO [Candidate]
-scanRegionByChunks' cinterface types fltr (start_address, end_address) chunk_size = do
-    if start_address >= end_address
-        then return []
-        else do
-            let max_size = maxSizeOf types
-            let offset_size = min (end_address - start_address) chunk_size
-            let read_size = min (end_address - start_address) (chunk_size + max_size)
-            let offset = [0 .. offset_size]
-            tail <- scanRegionByChunks' cinterface types fltr (start_address + offset_size, end_address) chunk_size
-            chunk <- cinterface start_address read_size
-            let candidates = mapMaybe (filterChunk types fltr 0 chunk) offset
-            evaluate candidates
-            return $ candidates ++ tail
-
-scanRegionByChunks :: [Type] -> Filters.Filter -> Maps.Region -> Int -> IO [Candidate]
-scanRegionByChunks types fltr region chunk_size = do
-    let pid = Maps.rPID region
-    let sa = Maps.startAddress region
-    let ea = Maps.endAddress region
-    let action = (\cinterface -> scanRegionByChunks' cinterface types fltr (sa, ea) chunk_size) :: IO.CInterface -> IO [Candidate]
-    candidates <- IO.withCInterface pid action
-    return candidates
-
-regionScanLog2 :: Maps.Region -> [Candidate] -> IO ()
-regionScanLog2 reg result = do
-    if length result == 0 then return () else putStrLn $ printf "Extracted %4d candidates from Region %4d (size = %8x)" (length result) (Maps.regionID reg) ((Maps.endAddress reg) - (Maps.startAddress reg))
-
-scanMap2' :: [Type] -> Filters.Filter -> Maps.MapInfo -> IO [Candidate]
-scanMap2' types fltr map = do
-    let regions = Maps.regions map
-    let action = vocal regionScanLog2 (\x -> scanRegionByChunks types fltr x 10000) :: Maps.Region -> IO [Candidate]
-    fc <- forM regions action :: IO [[Candidate]]
-    return $ concat fc
-
-scanMap2 :: [Type] -> Filters.Filter -> Maps.MapInfo -> IO PeepState
-scanMap2 types fltr map = do
-    let pid = (Maps.mPID map)
-    candidates <- scanMap2' types fltr map
-    return PeepState{pPID = pid, pCandidates = candidates, pRegions = map}
+scanMap :: [Type] -> Filters.Filter -> Maps.MapInfo -> IO PeepState
+scanMap = scanMapS 10000

@@ -70,13 +70,13 @@ test1 = do
                 all_maps <- Maps.getMapInfo pid
                 let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
                 let fltr = Filters.eqInteger 49
-                state <- State.scanMap2 [(Type.Type Type.Int64)] fltr maps
+                state <- State.scanMap [(Type.Type Type.Int64)] fltr maps
                 pause_process pid
-                let peeptom_matches = length . State.pCandidates $ state
+                let peeptom_matches = length . State.psCandidates $ state
                 scanmem_matches <- get_matches pid 49
                 putStrLn $ printf "First test:\n"
                 putStrLn $ printf "%d should be equal to %d" peeptom_matches scanmem_matches
-                putStrLn $ printf "%s" (if peeptom_matches == scanmem_matches then "Success!" else "Failure :c")
+                putStrLn $ printf "%s" (if peeptom_matches == scanmem_matches then "Success!\n\n" else "Failure :c\n\n")
                 return $ peeptom_matches == scanmem_matches
             )
     return status
@@ -89,12 +89,12 @@ test2 = do
                 all_maps <- Maps.getMapInfo pid
                 let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
                 let fltr = Filters.eqInteger 49
-                state <- State.scanMap2 [(Type.Type Type.Int64)] fltr maps
+                state <- State.scanMap [(Type.Type Type.Int64)] fltr maps
                 putStrLn $ printf "Second test:\n"
                 _ <- State.applyWriter (Writer.writeInt 3) state
                 scanmem_matches <- get_matches pid 49
                 putStrLn $ printf "%d should be 0" scanmem_matches
-                putStrLn $ printf "%s" (if 0 == scanmem_matches then "Success!" else "Failure :c")
+                putStrLn $ printf "%s" (if 0 == scanmem_matches then "Success!\n\n" else "Failure :c\n\n")
                 return (0 == scanmem_matches)
             )
     return status
@@ -107,11 +107,11 @@ test3 = do
                 all_maps <- Maps.getMapInfo pid
                 let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
                 let fltr = Filters.eqInteger 49
-                state <- State.scanMap2 [(Type.Type Type.Int64)] fltr maps
+                state <- State.scanMap [(Type.Type Type.Int64)] fltr maps
                 pause_process pid
                 update_values pid 49 0
                 updated_state <- State.updateState 4096 state
-                let first_elem_value = State.cData ((State.pCandidates updated_state) !! 0)
+                let first_elem_value = State.cData ((State.psCandidates updated_state) !! 0)
                 let cast = Conversions.i64FromBS first_elem_value
                 putStrLn $ printf "Third test:\n"
                 putStrLn $ printf "%d should be 0" cast

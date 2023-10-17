@@ -7,7 +7,6 @@ module PeepingTom.Maps (
     Address,
     MapID (..),
     Region (..),
-    Regions,
     MapInfo (..),
     getRegions,
     getMapInfo,
@@ -31,12 +30,11 @@ data X = X | NX deriving (Show)
 data S = S | P deriving (Show)
 data Permission = Permission {r :: R, w :: W, x :: X, s :: S}
 data MapID = MapID {majorID :: Int, minorID :: Int, inodeID :: Int}
-data Region = Region {startAddress :: Address, endAddress :: Address, permission :: Permission, offset :: Address, mapID :: MapID, fp :: FilePath, regionID :: Int, rPID :: PID}
+data Region = Region {rStartAddr :: Address, rEndAddr :: Address, rPermission :: Permission, rOffset :: Address, rMapID :: MapID, rFP :: FilePath, rID :: Int, rPID :: PID}
 
-type Regions = [Region]
-data MapInfo = MapInfo {regions :: Regions, mPID :: PID, executableName :: String}
+data MapInfo = MapInfo {miRegions :: [Region], miPID :: PID, miExecutableName :: String}
 
-showRegions :: Regions -> String
+showRegions :: [Region] -> String
 showRegions [] = ""
 showRegions (y : ys) = show y ++ "\n" ++ (showRegions ys)
 
@@ -61,27 +59,27 @@ instance Show Region where
     show m = out
       where
         fs =
-            (printf "%08x" (startAddress m))
+            (printf "%08x" (rStartAddr m))
                 ++ "-"
-                ++ (printf "%08x" (endAddress m))
+                ++ (printf "%08x" (rEndAddr m))
                 ++ " "
-                ++ show (permission m)
+                ++ show (rPermission m)
                 ++ " "
-                ++ (printf "%08x" (offset m))
+                ++ (printf "%08x" (rOffset m))
                 ++ " "
-                ++ show (mapID m)
+                ++ show (rMapID m)
         fsl =
             length fs
-        ss = (replicate (73 - fsl) ' ') ++ (fp m)
+        ss = (replicate (73 - fsl) ' ') ++ (rFP m)
         out = fs ++ ss
 instance Show MapInfo where
     show mi =
         "PID: "
-            ++ show (mPID mi)
+            ++ show (miPID mi)
             ++ "\nExecutable name: "
-            ++ executableName mi
+            ++ miExecutableName mi
             ++ "\nRegions: \n"
-            ++ showRegions (regions mi)
+            ++ showRegions (miRegions mi)
 
 mapsFile :: PID -> String
 mapsFile pid = printf "/proc/%d/maps" pid
@@ -109,9 +107,9 @@ getAddr str
 
 -- Permissions in /proc/pid/maps is written as
 -- rwxp or ---s
--- r/- represent read/no read permission
--- w/- represent write/no write permission
--- x/- represent execute/no execute permission
+-- r/- represent read/no read rPermission
+-- w/- represent write/no write rPermission
+-- x/- represent execute/no execute rPermission
 -- p/s represent private or shared memory
 getPermission :: String -> Permission
 getPermission str = perm
@@ -156,19 +154,19 @@ processLine pid line rid
     ofs = getOffset (seg !! 2)
     ids = getID (seg !! 3) (seg !! 4)
     filepath = getFilePath (drop 5 seg)
-    mregion = Region{startAddress = start_addr, endAddress = end_addr, permission = perm, offset = ofs, mapID = ids, fp = filepath, regionID = rid, rPID = pid}
+    mregion = Region{rStartAddr = start_addr, rEndAddr = end_addr, rPermission = perm, rOffset = ofs, rMapID = ids, rFP = filepath, rID = rid, rPID = pid}
 
-processLines' :: PID -> [String] -> Int -> Regions
+processLines' :: PID -> [String] -> Int -> [Region]
 processLines' _ [] _ = []
 processLines' pid (str : rest) rid = this ++ that
   where
     this = [processLine pid str rid]
     that = processLines' pid rest (rid + 1)
 
-processLines :: PID -> [String] -> Regions
+processLines :: PID -> [String] -> [Region]
 processLines pid l = processLines' pid l 0
 
-parseFile :: PID -> FilePath -> IO Regions
+parseFile :: PID -> FilePath -> IO [Region]
 parseFile pid filepath = do
     content <- IO.readFile filepath
     let l = lines content
@@ -176,7 +174,7 @@ parseFile pid filepath = do
     return vas
 
 -- Extracts Virtual memory information from /proc/pid/maps
-getRegions :: PID -> IO Regions
+getRegions :: PID -> IO [Region]
 getRegions pid = parseFile pid (mapsFile pid)
 
 getExecName :: PID -> IO String
@@ -195,34 +193,34 @@ totalBytes' :: [Region] -> Size
 totalBytes' [] = 0
 totalBytes' (y : ys) = this + that
   where
-    this = fromIntegral ((endAddress y) - (startAddress y))
+    this = fromIntegral ((rEndAddr y) - (rStartAddr y))
     that = totalBytes' ys
 
 totalBytes :: MapInfo -> Size
-totalBytes mapinfo = totalBytes' (regions mapinfo)
+totalBytes mapinfo = totalBytes' (miRegions mapinfo)
 
--- Filters for Regions
+-- Filters for [Region]
 
 filterMap :: (Region -> Bool) -> MapInfo -> MapInfo
-filterMap f maps = maps{regions = filtered_regions}
+filterMap f maps = maps{miRegions = filtered_miRegions}
   where
-    filtered_regions = filter f (regions maps)
+    filtered_miRegions = filter f (miRegions maps)
 
 filterRW :: Region -> Bool
 filterRW region = readP && writeP
   where
-    readP = case (r (permission region)) of
+    readP = case (r (rPermission region)) of
         R -> True
         NR -> False
-    writeP = case (w (permission region)) of
+    writeP = case (w (rPermission region)) of
         W -> True
         NW -> False
 
 filterMappings :: String -> Region -> Bool
 filterMappings execname region = not_mapping || not_exec
   where
-    not_mapping = ((inodeID . mapID) $ region) == 0
-    not_exec = (fp region == execname)
+    not_mapping = ((inodeID . rMapID) $ region) == 0
+    not_exec = (rFP region == execname)
 
 defaultFilter :: MapInfo -> (Region -> Bool)
 defaultFilter mapinfo = func
@@ -230,4 +228,4 @@ defaultFilter mapinfo = func
     func reg = rwf && maf
       where
         rwf = filterRW reg
-        maf = filterMappings (executableName mapinfo) reg
+        maf = filterMappings (miExecutableName mapinfo) reg
