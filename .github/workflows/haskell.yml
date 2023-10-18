@@ -18,7 +18,7 @@ jobs:
       - name: Clone ScanMem
         run: git clone https://github.com/scanmem/scanmem.git test/scanmem
       - name: Install requirements
-        run: apt install autotools-dev libtool libreadline-dev intltool python3
+        run: sudo apt install autotools-dev libtool libreadline-dev intltool python3
       - name: Build ScanMem
         run: |
           cd test/scanmem/
