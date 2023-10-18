@@ -1,43 +1,30 @@
-name: Haskell CI
-
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
-permissions:
-  contents: read
-
+name: Haskell CI
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
-
+  runhaskell:
+    name: PeepingTom
+    runs-on: ubuntu-latest # or macOS-latest, or windows-latest
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-haskell@v1
-      with:
-        ghc-version: '8.10.3'
-        cabal-version: '3.2'
-
-    - name: Cache
-      uses: actions/cache@v3
-      env:
-        cache-name: cache-cabal
-      with:
-        path: ~/.cabal
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
-        restore-keys: |
-          ${{ runner.os }}-build-${{ env.cache-name }}-
-          ${{ runner.os }}-build-
-          ${{ runner.os }}-
-
-    - name: Install dependencies
-      run: |
-        cabal update
-        cabal build --only-dependencies --enable-tests --enable-benchmarks
-    - name: Build
-      run: cabal build --enable-tests --enable-benchmarks all
-    - name: Run tests
-      run: cabal test all
+      - uses: actions/checkout@v3
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.6.1' # Resolves to the latest point release of GHC 8.8
+          cabal-version: '3.10.1.0' # Exact version of Cabal
+      - name: Clone ScanMem
+        run: git clone https://github.com/scanmem/scanmem.git test/scanmem
+      - name: Build ScanMem
+        run: |
+          cd test/scanmem/
+          ./autogen.sh
+          mkdir -p build && cd build
+          ../configure
+          make
+      - name: Build PeepingTom
+        run: cabal build
+      - name: Run Tests
+        run: LD_LIBRARY_PATH="$PWD/test/scanmem/build/.libs/:$LD_LIBRARY_PATH" cabal test
