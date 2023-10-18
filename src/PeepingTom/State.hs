@@ -131,14 +131,12 @@ regionScanHelper rinterface types fltr regid (start_address, end_address) chunk_
             evaluate candidates
             return $ candidates ++ tail
 
-regionScan :: [Type] -> Filters.Filter -> Maps.Region -> Size -> IO [Candidate]
-regionScan types fltr region chunk_size = do
-    let pid = Maps.rPID region
+regionScan :: IO.RInterface -> [Type] -> Filters.Filter -> Maps.Region -> Size -> IO [Candidate]
+regionScan rinterface types fltr region chunk_size = do
     let rid = Maps.rID region
     let sa = Maps.rStartAddr region
     let ea = Maps.rEndAddr region
-    let action = (\rinterface -> regionScanHelper rinterface types fltr rid (sa, ea) chunk_size) :: IO.RInterface -> IO [Candidate]
-    candidates <- IO.withRInterface pid action
+    candidates <- regionScanHelper rinterface types fltr rid (sa, ea) chunk_size
     return candidates
 
 regionScanLog :: Maps.Region -> [Candidate] -> IO ()
@@ -147,10 +145,17 @@ regionScanLog reg result = do
 
 scanMapHelper :: Size -> [Type] -> Filters.Filter -> Maps.MapInfo -> IO [Candidate]
 scanMapHelper chunk_size types fltr map = do
+    let pid = Maps.miPID map
     let regions = Maps.miRegions map
-    let action = vocal regionScanLog (\x -> regionScan types fltr x chunk_size) :: Maps.Region -> IO [Candidate]
-    fc <- forM regions action :: IO [[Candidate]]
-    return $ concat fc
+    candidates <-
+        IO.withRInterface
+            pid
+            ( \rinterface -> do
+                let action = vocal regionScanLog (\x -> regionScan rinterface types fltr x chunk_size) :: Maps.Region -> IO [Candidate]
+                fc <- forM regions action :: IO [[Candidate]]
+                return $ concat fc
+            )
+    return $ candidates
 
 updateCandidatesHelper :: IO.RInterface -> [Candidate] -> IO.MemoryChunk -> IO [Candidate]
 updateCandidatesHelper _ [] _ = return []
@@ -203,7 +208,7 @@ showState maxcandidates' maxregions' ps =
         ++ printf "Regions (%d): \n\n%s\n%s\n" (length . Maps.miRegions . psRegions $ ps) rstr rdot
         ++ printf "Candidates (%d): \n\n%s\n%s\n" (length . psCandidates $ ps) cstr cdot
   where
-    maxcandidates = if maxcandidates < 0 then (length . psCandidates $ ps) else maxcandidates'
+    maxcandidates = if maxcandidates' < 0 then (length . psCandidates $ ps) else maxcandidates'
     maxregions = if maxregions' < 0 then (length . Maps.miRegions . psRegions $ ps) else maxregions'
     candidate_list = take maxcandidates (psCandidates ps)
     cstrlist = fmap show candidate_list
