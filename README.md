@@ -14,7 +14,7 @@ In order to build, ...
 
 Automatic tests are provided, in order to ensure that PeepingTom matches the results of ScanMem. In order to run the automatic tests, you need to clone and build ScanMem.
 
-Start by cloning PeepingTom with the LD_LIBRARY_PATH="$PWD/test/scanmem/build/.libs/:$LD_LIBRARY_PATH" cabal run PeepingTom-test*--recurse-submodules* flag enabled.
+Start by cloning PeepingTom with the *--recurse-submodules* flag enabled.
 
     git clone --recurse-submodules https://github.com/lesserfish/PeepingTom.git
 
