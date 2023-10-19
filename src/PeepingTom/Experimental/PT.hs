@@ -243,11 +243,21 @@ extractRegion rinterface types fltr region chunk_size = do
     putStrLn $ printf "Extracted %4d candidates from Region. (size: %8x" (length candidates) (Maps.rEndAddr region - Maps.rStartAddr region)
     return candidates
 
+stop :: PID -> IO ()
+stop pid = do
+    Posix.kill pid Posix.SIGSTOP
+    return ()
+resume :: PID -> IO ()
+resume pid = do
+    Posix.kill pid Posix.SIGCONT
+    return ()
+
 scanMapHelper :: Size -> [T.Type] -> Filter -> Maps.MapInfo -> IO [Candidate]
 scanMapHelper chunk_size types fltr map = do
     let pid = Maps.miPID map
     let regions = Maps.miRegions map :: [Maps.Region]
     let filepath = printf "/proc/%d/mem" pid
+    stop (pid)
     candidates <-
         withFileOpen
             filepath
@@ -261,14 +271,14 @@ scanMapHelper chunk_size types fltr map = do
                         return candidates
                     )
             )
+    resume pid
     return candidates
 
 intTypes :: [T.Type]
 intTypes = [(T.Type T.Int8), (T.Type T.Int16), (T.Type T.Int32), (T.Type T.Int64)]
 
-debug2 :: IO ()
-debug2 = do
-    let pid = 309437 :: PID
+debug2 :: PID -> IO ()
+debug2 pid = do
     putStrLn $ printf "PID: %d" pid
     all_maps <- Maps.getMapInfo pid
     let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps

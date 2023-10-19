@@ -1,5 +1,6 @@
 module Main where
 
+import qualified PeepingTom.Experimental.PT as PT
 import qualified PeepingTom.Filters as Filters
 import PeepingTom.Internal
 import qualified PeepingTom.Maps as Maps
@@ -10,9 +11,10 @@ import qualified PeepingTom.Writer as Writer
 import System.IO
 import Text.Printf (printf)
 
-main :: IO ()
-main = do
-    let pid = 49095 :: PID
+m = 1
+pid = 374069
+main1 :: IO ()
+main1 = do
     putStrLn $ printf "PID: %d" pid
     all_maps <- Maps.getMapInfo pid
     let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
@@ -43,3 +45,7 @@ main = do
     _ <- getChar
     return ()
 --}
+main2 :: IO ()
+main2 = PT.debug2 pid
+
+main = if m == 1 then main1 else main2
