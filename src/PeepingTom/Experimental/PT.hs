@@ -1,7 +1,7 @@
 {-# LANGUAGE CApiFFI #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 
-module PeepingTom.Raw.PT where
+module PeepingTom.Experimental.PT where
 
 import Control.Exception
 import Control.Monad
