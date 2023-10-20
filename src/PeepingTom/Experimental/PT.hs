@@ -157,12 +157,11 @@ eqInt32 value action = do
     return output
 
 eqInt' :: CStringLen -> Filter
-eqInt' xstr t ystr
-    | Filters.isI8 t = eqCStringLenN 1 xstr ystr
-    | Filters.isI16 t = eqCStringLenN 2 xstr ystr
-    | Filters.isI32 t = eqCStringLenN 4 xstr ystr
-    | Filters.isI64 t = eqCStringLenN 8 xstr ystr
-    | otherwise = return False
+eqInt' xstr T.Int8 ystr = eqCStringLenN 1 xstr ystr
+eqInt' xstr T.Int16 ystr = eqCStringLenN 2 xstr ystr
+eqInt' xstr T.Int32 ystr = eqCStringLenN 4 xstr ystr
+eqInt' xstr T.Int64 ystr = eqCStringLenN 8 xstr ystr
+eqInt' xstr _ ystr = return False
 
 eqInt :: Int -> (Filter -> IO a) -> IO a
 eqInt value action = do
@@ -275,7 +274,7 @@ scanMapHelper chunk_size types fltr map = do
     return candidates
 
 intTypes :: [T.Type]
-intTypes = [(T.Type T.Int8), (T.Type T.Int16), (T.Type T.Int32), (T.Type T.Int64)]
+intTypes = [(T.Int8), (T.Int16), (T.Int32), (T.Int64)]
 
 debug2 :: PID -> IO ()
 debug2 pid = do

@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 module PeepingTom.Filters (
     Filter,
     isI8,
@@ -10,81 +12,87 @@ module PeepingTom.Filters (
     isU64,
     isFlt,
     isDbl,
-    eqInteger,
-    eqBS,
+    eqInt,
     compareBS,
-    compareInteger,
+    compareInt,
 ) where
 
 import qualified Data.ByteString as BS
 import Data.Functor ((<$>))
-import Data.List (any)
+import Data.List (any, intersperse)
 import Data.Maybe (Maybe, fromMaybe)
 import Data.Typeable (Typeable, typeOf)
+import Debug.Trace
 import PeepingTom.Conversions
 import PeepingTom.Type
+import Text.Printf
 
 type Filter = BS.ByteString -> Type -> Bool
 
-isType :: (Typeable a) => a -> Type -> Bool
-isType a (Type b) = typeOf a == typeOf b
+isI8 :: Filter
+isI8 _ Int8 = True
+isI8 _ _ = False
 
-isI8 :: Type -> Bool
-isI8 = isType Int8
+isI16 :: Filter
+isI16 _ Int16 = True
+isI16 _ _ = False
 
-isI16 :: Type -> Bool
-isI16 = isType Int16
+isI32 :: Filter
+isI32 _ Int32 = True
+isI32 _ _ = False
 
-isI32 :: Type -> Bool
-isI32 = isType Int32
+isI64 :: Filter
+isI64 _ Int64 = True
+isI64 _ _ = False
 
-isI64 :: Type -> Bool
-isI64 = isType Int64
+isU8 :: Filter
+isU8 _ UInt8 = True
+isU8 _ _ = False
 
-isU8 :: Type -> Bool
-isU8 = isType UInt8
+isU16 :: Filter
+isU16 _ UInt16 = True
+isU16 _ _ = False
 
-isU16 :: Type -> Bool
-isU16 = isType UInt16
+isU32 :: Filter
+isU32 _ UInt32 = True
+isU32 _ _ = False
 
-isU32 :: Type -> Bool
-isU32 = isType UInt32
+isU64 :: Filter
+isU64 _ UInt64 = True
+isU64 _ _ = False
 
-isU64 :: Type -> Bool
-isU64 = isType UInt64
+isFlt :: Filter
+isFlt _ Flt = True
+isFlt _ _ = False
 
-isFlt :: Type -> Bool
-isFlt = isType Flt
-
-isDbl :: Type -> Bool
-isDbl = isType Dbl
-
-asType :: Type -> BS.ByteString -> a -> Maybe a
-asType t bs x =
-    if (BS.length bs < sizeOf t)
-        then Nothing
-        else Just $ x
-
-castInteger' :: Type -> BS.ByteString -> Maybe Integer
-castInteger' t b
-    | isI8 t = Just . toInteger $ i8FromBS b
-    | isI16 t = Just . toInteger $ i16FromBS b
-    | isI32 t = Just . toInteger $ i32FromBS b
-    | isI64 t = Just . toInteger $ i64FromBS b
-    | isU8 t = Just . toInteger $ u8FromBS b
-    | isU16 t = Just . toInteger $ u16FromBS b
-    | isU32 t = Just . toInteger $ u32FromBS b
-    | isU64 t = Just . toInteger $ u64FromBS b
-    | otherwise = Nothing
+isDbl :: Filter
+isDbl _ Dbl = True
+isDbl _ _ = False
 
 castInteger :: Type -> BS.ByteString -> Maybe Integer
-castInteger t bs = (castInteger' t bs) >>= (asType t bs)
+castInteger Int8 b = Just . toInteger $ i8FromBS b
+castInteger Int16 b = Just . toInteger $ i16FromBS b
+castInteger Int32 b = Just . toInteger $ i32FromBS b
+castInteger Int64 b = Just . toInteger $ i64FromBS b
+castInteger UInt8 b = Just . toInteger $ u8FromBS b
+castInteger UInt16 b = Just . toInteger $ u16FromBS b
+castInteger UInt32 b = Just . toInteger $ u32FromBS b
+castInteger UInt64 b = Just . toInteger $ u64FromBS b
+castInteger _ _ = Nothing
 
-compareInteger' :: (Integer -> Bool) -> BS.ByteString -> Type -> Maybe Bool
-compareInteger' fltr bs t = fltr <$> (castInteger t bs)
+ifLargeEnough :: Type -> BS.ByteString -> Maybe a -> Maybe a
+ifLargeEnough t bs a = if (BS.length bs) < (sizeOf t) then Nothing else a
 
-compareInteger :: (Integer -> Bool) -> Filter
-compareInteger fltr bs t = fromMaybe False (compareInteger' fltr bs t)
+compareInt' :: (Integer -> Bool) -> BS.ByteString -> Type -> Maybe Bool
+compareInt' fltr bs t = fltr <$> (ifLargeEnough t bs (castInteger t bs))
+
+bsToString :: BS.ByteString -> String
+bsToString bs = concat $ intersperse " " (fmap (printf "0x%02X") (BS.unpack bs))
+
+compareInt :: (Integer -> Bool) -> Filter
+compareInt fltr bs t = output
+  where
+    output = fromMaybe False (compareInt' fltr bs t)
 
 -- ByteString
 eqBS :: BS.ByteString -> Filter
@@ -93,37 +101,34 @@ eqBS bs1 bs2 _ = bs1 == bs2
 compareBS :: (BS.ByteString -> Bool) -> Filter
 compareBS fltr bs2 _ = fltr bs2
 
--- TypeData: Comparisons with a given Type and a ByteString
-data TypeData = TypeData {aType :: Type, aData :: BS.ByteString}
+eqBSN :: Int -> BS.ByteString -> BS.ByteString -> Bool
+eqBSN 0 _ _ = True
+eqBSN n !bsx bsy
+    | bx == by = eqBSN (n - 1) (BS.tail bsx) (BS.tail bsy)
+    | otherwise = False
+  where
+    !bx = BS.head bsx
+    by = BS.head bsy
 
-compareTD :: TypeData -> Filter
-compareTD td bs t = (typeOf (aType td) == typeOf t) && (aData td == (BS.take (sizeOf t) bs))
+testIBS :: (BS.ByteString, BS.ByteString, BS.ByteString, BS.ByteString) -> Filter
+testIBS (i8, i16, i32, i64) bs Int8 = i8 == (BS.take 1 bs)
+testIBS (i8, i16, i32, i64) bs Int16 = i16 == (BS.take 2 bs)
+testIBS (i8, i16, i32, i64) bs Int32 = i32 == (BS.take 4 bs)
+testIBS (i8, i16, i32, i64) bs Int64 = i64 == (BS.take 8 bs)
 
-compareTD' :: BS.ByteString -> Type -> TypeData -> Bool
-compareTD' bs t td = compareTD td bs t
+ensureSize :: Int -> BS.ByteString -> Bool -> Bool
+ensureSize size bs x = if (BS.length bs < size) then False else x
 
-compareTDA :: [TypeData] -> Filter
-compareTDA tda bs t = any (compareTD' bs t) tda
+testIBS' :: (BS.ByteString, BS.ByteString, BS.ByteString, BS.ByteString) -> Filter
+testIBS' (i8, i16, i32, i64) bs Int8 = ensureSize 1 bs (eqBSN 1 i8 bs)
+testIBS' (i8, i16, i32, i64) bs Int16 = ensureSize 2 bs (eqBSN 2 i16 bs)
+testIBS' (i8, i16, i32, i64) bs Int32 = ensureSize 4 bs (eqBSN 4 i32 bs)
+testIBS' (i8, i16, i32, i64) bs Int64 = ensureSize 8 bs (eqBSN 8 i64 bs)
 
-integerTD :: Type -> Integer -> TypeData
-integerTD t i
-    | isI8 t = TypeData t (i8ToBS . fromIntegral $ i)
-    | isI16 t = TypeData t (i16ToBS . fromIntegral $ i)
-    | isI32 t = TypeData t (i32ToBS . fromIntegral $ i)
-    | isI64 t = TypeData t (i64ToBS . fromIntegral $ i)
-    | isU8 t = TypeData t (u8ToBS . fromIntegral $ i)
-    | isU16 t = TypeData t (u16ToBS . fromIntegral $ i)
-    | isU32 t = TypeData t (u32ToBS . fromIntegral $ i)
-    | isU64 t = TypeData t (u64ToBS . fromIntegral $ i)
-    | otherwise = TypeData t (BS.empty)
-
-integerTDA :: Integer -> [TypeData]
-integerTDA i =
-    [ integerTD (Type Int8) (fromIntegral i)
-    , integerTD (Type Int16) (fromIntegral i)
-    , integerTD (Type Int32) (fromIntegral i)
-    , integerTD (Type Int64) (fromIntegral i)
-    ]
-
-eqInteger :: Integer -> Filter
-eqInteger i = compareTDA (integerTDA i)
+eqInt :: Integer -> Filter
+eqInt value = testIBS' (i8, i16, i32, i64)
+  where
+    !i8 = i8ToBS (fromInteger value)
+    !i16 = i16ToBS (fromInteger value)
+    !i32 = i32ToBS (fromInteger value)
+    !i64 = i64ToBS (fromInteger value)

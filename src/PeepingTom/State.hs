@@ -71,10 +71,12 @@ vocal log action input = do
     return output
 
 maxSizeOf :: [Type] -> Size
-maxSizeOf types = foldr max 0 (map sizeOf types)
+maxSizeOf types = output
+  where
+    output = foldr max 0 (map sizeOf types)
 
 maxType :: [Type] -> Type
-maxType [] = (Type Void)
+maxType [] = Void
 maxType (t : rest)
     | sizeOf t < sizeOf (maxType rest) = (maxType rest)
     | otherwise = t
@@ -125,7 +127,7 @@ regionScanHelper rinterface types fltr regid (start_address, end_address) chunk_
             let offset_size = min (end_address - start_address) chunk_size
             let read_size = min (end_address - start_address) (chunk_size + max_size)
             let offset = [0 .. offset_size]
-            tail <- regionScanHelper rinterface types fltr regid (start_address + offset_size, end_address) chunk_size
+            tail <- regionScanHelper rinterface types fltr regid (start_address + offset_size + 1, end_address) chunk_size
             chunk <- rinterface start_address read_size
             let candidates = mapMaybe (filterChunk types fltr regid chunk) offset
             evaluate candidates
