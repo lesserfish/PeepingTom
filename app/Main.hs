@@ -19,10 +19,10 @@ main1 = do
     all_maps <- Maps.getMapInfo pid
     let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
     let fltr_41 = Filters.eqInt 41
-    peepstate <- scanMap [Int32] fltr_41 maps
+    peepstate <- scanMap [Int64, Int32, Int16, Int8] fltr_41 maps
     putStrLn $ "[DEBUG] This is the initial extraction of Int64 Types equal to 41"
     putStrLn $ "[DEBUG] Please compare this result with scanmem!"
-    putStrLn $ showState (-1) 0 peepstate
+    putStrLn $ showState (5) 0 peepstate
 
 {--
     putStrLn $ "[DEBUG] After the results have been checked, please alter the candidates 0..200 to value 43! Please enter once complete...."

@@ -18,6 +18,7 @@ module PeepingTom.Filters (
 ) where
 
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Unsafe as BSUnsafe
 import Data.Functor ((<$>))
 import Data.List (any, intersperse)
 import Data.Maybe (Maybe, fromMaybe)
@@ -104,11 +105,22 @@ compareBS fltr bs2 _ = fltr bs2
 eqBSN :: Int -> BS.ByteString -> BS.ByteString -> Bool
 eqBSN 0 _ _ = True
 eqBSN n !bsx bsy
+    | (BS.length bsy) < n = False
     | bx == by = eqBSN (n - 1) (BS.tail bsx) (BS.tail bsy)
     | otherwise = False
   where
     !bx = BS.head bsx
     by = BS.head bsy
+
+eqBSN' :: Int -> BS.ByteString -> BS.ByteString -> Bool
+eqBSN' 0 _ _ = True
+eqBSN' n !bsx bsy
+    | (BS.length bsy) < n = False
+    | bx == by = eqBSN (n - 1) (BSUnsafe.unsafeTail bsx) (BSUnsafe.unsafeTail bsy)
+    | otherwise = False
+  where
+    !bx = BSUnsafe.unsafeHead bsx
+    by = BSUnsafe.unsafeHead bsy
 
 testIBS :: (BS.ByteString, BS.ByteString, BS.ByteString, BS.ByteString) -> Filter
 testIBS (i8, i16, i32, i64) bs Int8 = i8 == (BS.take 1 bs)
@@ -116,14 +128,11 @@ testIBS (i8, i16, i32, i64) bs Int16 = i16 == (BS.take 2 bs)
 testIBS (i8, i16, i32, i64) bs Int32 = i32 == (BS.take 4 bs)
 testIBS (i8, i16, i32, i64) bs Int64 = i64 == (BS.take 8 bs)
 
-ensureSize :: Int -> BS.ByteString -> Bool -> Bool
-ensureSize size bs x = if (BS.length bs < size) then False else x
-
 testIBS' :: (BS.ByteString, BS.ByteString, BS.ByteString, BS.ByteString) -> Filter
-testIBS' (i8, i16, i32, i64) bs Int8 = ensureSize 1 bs (eqBSN 1 i8 bs)
-testIBS' (i8, i16, i32, i64) bs Int16 = ensureSize 2 bs (eqBSN 2 i16 bs)
-testIBS' (i8, i16, i32, i64) bs Int32 = ensureSize 4 bs (eqBSN 4 i32 bs)
-testIBS' (i8, i16, i32, i64) bs Int64 = ensureSize 8 bs (eqBSN 8 i64 bs)
+testIBS' (i8, i16, i32, i64) bs Int8 = (eqBSN 1 i8 bs)
+testIBS' (i8, i16, i32, i64) bs Int16 = (eqBSN 2 i16 bs)
+testIBS' (i8, i16, i32, i64) bs Int32 = (eqBSN 4 i32 bs)
+testIBS' (i8, i16, i32, i64) bs Int64 = (eqBSN 8 i64 bs)
 
 eqInt :: Integer -> Filter
 eqInt value = testIBS' (i8, i16, i32, i64)
