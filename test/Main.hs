@@ -17,8 +17,11 @@ import Text.Printf (printf)
 foreign import capi safe "PeepingTom-test.h create_process"
     c_create_process :: IO CInt
 
-foreign import capi safe "PeepingTom-test.h get_matches"
-    c_get_matches :: CInt -> CInt -> IO CULong
+foreign import capi safe "PeepingTom-test.h get_matchesi"
+    c_get_matchesi :: CInt -> CInt -> IO CULong
+
+foreign import capi safe "PeepingTom-test.h get_matches64"
+    c_get_matches64 :: CInt -> CInt -> IO CULong
 
 foreign import capi safe "PeepingTom-test.h update_values"
     c_update_values :: CInt -> CInt -> CInt -> IO ()
@@ -40,9 +43,14 @@ create_process = do
     cint <- c_create_process
     return $ fromIntegral cint
 
-get_matches :: Int -> Int -> IO Int
-get_matches pid value = do
-    cvalue <- c_get_matches (fromIntegral pid) (fromIntegral value)
+get_matches64 :: Int -> Int -> IO Int
+get_matches64 pid value = do
+    cvalue <- c_get_matches64 (fromIntegral pid) (fromIntegral value)
+    return $ fromIntegral cvalue
+
+get_matchesi :: Int -> Int -> IO Int
+get_matchesi pid value = do
+    cvalue <- c_get_matchesi (fromIntegral pid) (fromIntegral value)
     return $ fromIntegral cvalue
 
 update_values :: Int -> Int -> Int -> IO ()
@@ -70,12 +78,12 @@ test1 = do
             ( \pid -> do
                 all_maps <- Maps.getMapInfo pid
                 let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
-                let fltr = Filters.eqInteger 49
-                state <- State.scanMap [(Type.Type Type.Int64)] fltr maps
+                let fltr = Filters.eqInt 49
+                state <- State.scanMap [(Type.Int64)] fltr maps
                 pause_process pid
                 let peeptom_matches = length . State.psCandidates $ state
-                scanmem_matches <- get_matches pid 49
-                putStrLn $ printf "First test:\n"
+                scanmem_matches <- get_matches64 pid 49
+                putStrLn $ printf "Test:\n"
                 putStrLn $ printf "%d should be equal to %d" peeptom_matches scanmem_matches
                 putStrLn $ printf "%s" (if peeptom_matches == scanmem_matches then "Success!\n\n" else "Failure :c\n\n")
                 return $ peeptom_matches == scanmem_matches
@@ -89,11 +97,11 @@ test2 = do
             ( \pid -> do
                 all_maps <- Maps.getMapInfo pid
                 let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
-                let fltr = Filters.eqInteger 49
-                state <- State.scanMap [(Type.Type Type.Int64)] fltr maps
-                putStrLn $ printf "Second test:\n"
+                let fltr = Filters.eqInt 49
+                state <- State.scanMap [(Type.Int64)] fltr maps
+                putStrLn $ printf "Test:\n"
                 _ <- State.applyWriter (Writer.writeInt 3) state
-                scanmem_matches <- get_matches pid 49
+                scanmem_matches <- get_matches64 pid 49
                 putStrLn $ printf "%d should be 0" scanmem_matches
                 putStrLn $ printf "%s" (if 0 == scanmem_matches then "Success!\n\n" else "Failure :c\n\n")
                 return (0 == scanmem_matches)
@@ -107,17 +115,36 @@ test3 = do
             ( \pid -> do
                 all_maps <- Maps.getMapInfo pid
                 let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
-                let fltr = Filters.eqInteger 49
-                state <- State.scanMap [(Type.Type Type.Int64)] fltr maps
+                let fltr = Filters.eqInt 49
+                state <- State.scanMap [(Type.Int64)] fltr maps
                 pause_process pid
                 update_values pid 49 0
                 updated_state <- State.updateState 4096 state
                 let first_elem_value = State.cData ((State.psCandidates updated_state) !! 0)
                 let cast = Conversions.i64FromBS first_elem_value
-                putStrLn $ printf "Third test:\n"
+                putStrLn $ printf "Test:\n"
                 putStrLn $ printf "%d should be 0" cast
                 putStrLn $ printf "%s" (if cast == 0 then "Success!" else "Failure :c")
                 return $ cast == 0
+            )
+    return status
+
+test4 :: IO Bool
+test4 = do
+    status <-
+        withProcess
+            ( \pid -> do
+                all_maps <- Maps.getMapInfo pid
+                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
+                let fltr = Filters.eqInt 49
+                state <- State.scanMap [Type.Int64, Type.Int32, Type.Int16, Type.Int8] fltr maps
+                pause_process pid
+                let peeptom_matches = length . State.psCandidates $ state
+                scanmem_matches <- get_matchesi pid 49
+                putStrLn $ printf "test:\n"
+                putStrLn $ printf "%d should be equal to %d" peeptom_matches scanmem_matches
+                putStrLn $ printf "%s" (if peeptom_matches == scanmem_matches then "Success!\n\n" else "Failure :c\n\n")
+                return $ peeptom_matches == scanmem_matches
             )
     return status
 
@@ -131,6 +158,9 @@ test 2 = do
 test 3 = do
     ok <- test3
     if ok then return () else exitWith (ExitFailure 1)
+test 4 = do
+    ok <- test4
+    if ok then return () else exitWith (ExitFailure 1)
 test _ = return ()
 
 testall :: IO ()
@@ -138,6 +168,7 @@ testall = do
     test 1
     test 2
     test 3
+    test 4
 
 main :: IO ()
 main = do

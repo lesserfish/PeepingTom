@@ -35,7 +35,7 @@ void clear_scanmem()
 {
 
 }
-unsigned long get_matches(int PID, int value)
+unsigned long get_matches64(int PID, int value)
 {
     // Initialize the server
     sm_set_backend();
@@ -51,6 +51,35 @@ unsigned long get_matches(int PID, int value)
     // Make it such that we only search int64
     snprintf(command, 128, "option scan_data_type int64");
     sm_backend_exec_cmd(command);
+    
+    // Scan for values equal to 2
+    snprintf(command, 128, "%d", value);
+    sm_backend_exec_cmd(command);
+    double progress = 0;
+    while(progress != 1.0)
+    {
+        progress = sm_get_scan_progress();
+    }
+    unsigned long count = sm_get_num_matches();
+    return count;
+}
+unsigned long get_matchesi(int PID, int value)
+{
+    // Initialize the server
+    sm_set_backend();
+    sm_init();
+    sm_backend_exec_cmd("reset");
+    
+    char command[128];
+
+    // Attach to the process
+    snprintf(command, 128, "pid %d", PID);
+    sm_backend_exec_cmd(command);
+    
+    // Make it such that we only search int64
+    snprintf(command, 128, "option scan_data_type int");
+    sm_backend_exec_cmd(command);
+    sm_backend_exec_cmd("reset");
     
     // Scan for values equal to 2
     snprintf(command, 128, "%d", value);
