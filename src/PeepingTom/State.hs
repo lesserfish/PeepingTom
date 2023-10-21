@@ -100,8 +100,8 @@ isInChunk candidate chunk = (candidate_addr >= chunk_addr) && (candidate_addr + 
     chunk_addr = IO.mcStartAddr chunk
     chunk_size = IO.mcSize chunk
 
-filterChunk :: [Type] -> Filters.Filter -> Int -> IO.MemoryChunk -> Address -> Maybe Candidate
-filterChunk types fltr regid chunk offset = output
+filterAddress :: [Type] -> Filters.Filter -> Int -> IO.MemoryChunk -> Address -> Maybe Candidate
+filterAddress types fltr regid chunk offset = output
   where
     address = (IO.mcStartAddr chunk) + offset
     bytes = BS.drop offset (IO.mcData chunk) -- Get all the bytes starting from offset
@@ -129,7 +129,7 @@ regionScanHelper rinterface types fltr regid (start_address, end_address) chunk_
             let offset = [0 .. offset_size]
             tail <- regionScanHelper rinterface types fltr regid (start_address + offset_size + 1, end_address) chunk_size
             chunk <- rinterface start_address read_size
-            let candidates = mapMaybe (filterChunk types fltr regid chunk) offset
+            let candidates = mapMaybe (filterAddress types fltr regid chunk) offset
             evaluate candidates
             return $ candidates ++ tail
 
