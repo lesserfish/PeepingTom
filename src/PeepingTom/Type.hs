@@ -1,6 +1,7 @@
 module PeepingTom.Type (
     Type (..),
     sizeOf,
+    intTypes,
 ) where
 
 import PeepingTom.Internal
@@ -33,3 +34,6 @@ sizeOf UInt64 = 8
 sizeOf Flt = 4
 sizeOf Dbl = 8
 sizeOf (Bytes count) = count
+
+intTypes :: [Type]
+intTypes = [Int8, Int16, Int32, Int64]

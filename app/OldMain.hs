@@ -1,102 +1,52 @@
-{-# LANGUAGE CApiFFI #-}
-{-# LANGUAGE ForeignFunctionInterface #-}
-
 module Main where
 
-import Foreign.C
-import qualified PeepingTom.Conversions as Conversions
+import CLI
+import qualified PeepingTom.Experimental.PT as PT
 import qualified PeepingTom.Filters as Filters
+import PeepingTom.Internal
 import qualified PeepingTom.Maps as Maps
-import qualified PeepingTom.State as State
-import qualified PeepingTom.Type as Type
+import qualified PeepingTom.Posix as Posix
+import PeepingTom.State
+import PeepingTom.Type
 import qualified PeepingTom.Writer as Writer
-import System.Environment
+import System.IO
 import Text.Printf (printf)
 
-foreign import capi safe "PeepingTom-test.h create_process"
-    c_create_process :: IO CInt
-foreign import capi safe "PeepingTom-test.h kill_process"
-    c_kill :: CInt -> IO ()
+m = 1
+pid = 374069
+main1 :: IO ()
+main1 = do
+    putStrLn $ printf "PID: %d" pid
+    all_maps <- Maps.getMapInfo pid
+    let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
+    let fltr_41 = Filters.eqInt 41
+    peepstate <- scanMap [Int64, Int32, Int16, Int8] fltr_41 maps
+    putStrLn $ "[DEBUG] This is the initial extraction of Int64 Types equal to 41"
+    putStrLn $ "[DEBUG] Please compare this result with scanmem!"
+    putStrLn $ showState (5) 0 peepstate
 
-create_process :: IO Int
-create_process = do
-    cint <- c_create_process
-    return $ fromIntegral cint
-
-kill :: Int -> IO ()
-kill pid = c_kill (fromIntegral pid)
-
-withProcess :: (Int -> IO a) -> IO a
-withProcess action = do
-    putStrLn $ "Launching process..."
-    pid <- create_process
-    putStrLn $ printf "Started a process with PID %d" pid
-    putStrLn $ printf "Launching test!"
-    output <- action pid
-    kill pid
-    return output
-
-test1 :: IO Bool
-test1 = do
-    status <-
-        withProcess
-            ( \pid -> do
-                all_maps <- Maps.getMapInfo pid
-                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
-                let fltr = Filters.eqInteger 49
-                state <- State.scanMap [(Type.Type Type.Int64)] fltr maps
-                let peeptom_matches = length . State.pCandidates $ state
-                return $ True
-            )
-    return status
-
-test2 :: IO Bool
-test2 = do
-    status <-
-        withProcess
-            ( \pid -> do
-                all_maps <- Maps.getMapInfo pid
-                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
-                let fltr = Filters.eqInteger 49
-                state <- State.scanMap2 [(Type.Type Type.Int64)] fltr maps
-                putStrLn $ printf "Second test:\n"
-                _ <- State.applyWriter (Writer.writeInt 3) state
-                return True
-            )
-    return status
-
-test3 :: IO Bool
-test3 = do
-    status <-
-        withProcess
-            ( \pid -> do
-                all_maps <- Maps.getMapInfo pid
-                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
-                let fltr = Filters.eqInteger 49
-                state <- State.scanMap2 [(Type.Type Type.Int64)] fltr maps
-                updated_state <- State.updateState 4096 state
-                let first_elem_value = State.cData ((State.pCandidates updated_state) !! 0)
-                let cast = Conversions.i64FromBS first_elem_value
-                return True
-            )
-    return status
-
-testall :: IO ()
-testall = do
-    _ <- test1
-    _ <- test2
-    _ <- test3
+{--
+    putStrLn $ "[DEBUG] After the results have been checked, please alter the candidates 0..200 to value 43! Please enter once complete...."
+    _ <- getChar
+    putStrLn $ "[DEBUG] We are now showing the candidates which still have value equal 41. Please compare the results with scanmem!"
+    peepstate2 <- updateState 4096 peepstate
+    let peepstate41 = applyFilter fltr_41 peepstate2
+    putStrLn $ showState 5 0 peepstate41
+    putStrLn $ "[DEBUG] We are now showing the candidates which have a value equal to 43. Please compare the results with scanmem! Please enter once complete!"
+    let peepstate43 = applyFilter (Filters.eqInt 43) peepstate2
+    putStrLn $ showState 5 0 peepstate43
+    _ <- getChar
+    putStrLn $ "[DEBUG] We are now updating the candidates with value equal to 43. We are setting the new value equal to 45! Press enter to continue:"
+    _ <- getChar
+    peepstate45 <- applyWriter (Writer.writeInt 45) peepstate43
+    putStrLn $ "[DEBUG] This is the result after updating the values! Please compare the results with scanmem!"
+    putStrLn $ showState 5 0 peepstate45
+    _ <- getChar
+    putStrLn $ "[DEBUG] This is the end of the Debug! Please set all of the remaining candidates in scanmem equal to 41. Hope it worked out!"
+    _ <- getChar
     return ()
+--}
+main2 :: IO ()
+main2 = PT.debug2 pid
 
-main :: IO ()
-main = testall
-
--- module Main where
-
--- import PeepingTom.State
--- import System.IO
-
--- main :: IO ()
--- main = do
---    PeepingTom.State.debug
---    return ()
+main = if m == 1 then main1 else main2
