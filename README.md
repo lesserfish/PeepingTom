@@ -1,3 +1,6 @@
+
+
+
 # PeepingTom
 
 PeepingTom is a library and tool written in Haskell designed to scan the virtual memory of processes, and extract regions of interest. It behaves similarly to <cite>[ScanMem][1]</cite> or <cite>[Cheat Engine][2]</cite>.
@@ -5,6 +8,16 @@ PeepingTom is a library and tool written in Haskell designed to scan the virtual
 PeepingTom initially reads and parses the virtual memory region information located in /proc/pid/maps. It filters regions of interest, and uses Haskell's FFI to call pread and pwrite on /proc/pid/mem. 
 
 This allow us to directly read and write to a process's virtual memory, letting us farm that *sweet* *sweet* <cite>[Monkey Money][3]</cite> in Bloons TD 6 before we eventually get banned.
+
+## Preview
+
+The follow is a preview, using the game <cite>[Hotline Miami][4]</cite>
+
+
+
+https://github.com/lesserfish/PeepingTom/assets/73536889/0f1be3e1-9d75-4ee9-b798-c12240afde79
+
+
 
 ## Building
 
@@ -331,3 +344,4 @@ This will set each address in fstate to be equal to 127, taking into considerati
 [1]: https://github.com/scanmem/scanmem
 [2]: https://www.cheatengine.org/
 [3]: https://bloons.fandom.com/wiki/Monkey_Money
+[4]: https://store.steampowered.com/app/219150/Hotline_Miami/
