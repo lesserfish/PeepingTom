@@ -8,7 +8,25 @@ This allow us to directly read and write to a process's virtual memory, letting 
 
 ## Building
 
-In order to build, ...
+Building PeepingTom should be relatively straight-forward.
+
+The .cabal files requires cabal version 3.0, and base version >= 4.18.0.0, however, it is likely to compile under previous versions.
+
+If you need to compile this with other versions of cabal, just update the .cabal file.
+
+To compile, simply run
+
+    cabal build
+
+The application will be compiled and saved to dist-newstyle/.../.../somewhere
+
+Since the application relies on having sudo permissions for reading/writing the virtual memory of other processes, you may prefer to run
+
+    mkdir build
+    cabal install --installdir=./build/ --overwrite-policy=always 
+    sudo ./build/PeepingTom
+
+If you are interested in running the automatic tests, additional steps need to be taken. Please refer to the following section.
 
 ## Testing
 
@@ -18,7 +36,14 @@ Start by cloning PeepingTom with the *--recurse-submodules* flag enabled.
 
     git clone --recurse-submodules https://github.com/lesserfish/PeepingTom.git
 
-This will not only clone PeepingTom, but clone scanmem directly on test/scanmem/ directory. We then need to build scanmem. The library files should be located in tests/scanmem/build/.libs. In order to ensure this, follow these steps
+
+This will not only clone PeepingTom, but clone scanmem directly on test/scanmem/ directory. We then need to build scanmem. 
+
+Although PeepingTom has no additional requirements, scanmem does. So, in order to support testing, you need to install the following packages:
+
+    sudo apt install autotools-dev libtool libreadline-dev intltool python3
+
+The library files should be located in tests/scanmem/build/.libs. In order to ensure this, follow these steps
 
     cd test/scanmem/
     ./autogen.sh
@@ -34,7 +59,6 @@ or
     
     LD_LIBRARY_PATH="$PWD/test/scanmem/build/.libs/:$LD_LIBRARY_PATH" cabal run PeepingTom-test
  
-## Library Usage
 
 ## Application Usage
 
@@ -165,7 +189,144 @@ You can also print the current options by running
 
     > list options
 
+## Library Usage
 
+PeepingTom is initially an application, and not a library. However, the main methods used by the application have been separated in the form of a library.
+
+This is NOT a public library. I do not have any plans to provide continuous support for this library. All methods can and will change without warning.
+
+PeepingTom is JUST a cool learning project I wrote. It is released under the MIT license, so the following applies:
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+Having said that, if you want to use the library for your own application, the following is an example of how it works. 
+
+### Scanning for virtual memory regions.
+
+In order to identify the regions of virtual memory, you can run the following functions
+
+    import qualified PeepingTom.Maps as Maps
+
+    let pid = 12345678
+    map_all <- Maps.getMapInfo pid
+
+This will extract ALL of the regions of virtual memory. We are usually not interested in all of them. In order to filter the regions of virtual memory that are interesting, you can use the default filter:
+
+    let fltr = defaultFilter map_all
+    let map = filterMap fltr map_all
+
+This will extract the regions of virtual memory that
+
+1. Have length greather than 0
+2. Have read/write permissions set
+3. Are not mappings to external files, with the exception of the main executable (which is symlinked in /proc/pid/exe)
+
+The default filter matches the default filter of scanmem.
+
+### Initial scan:
+
+We are interested in extracting the addresses in virtual memory that satisfy a specific filter.
+
+The filters need to be of type: 
+    
+    type Filter = BS.ByteString -> Type -> Bool
+
+where Type is a custom data type defined in PeepingTom.Type. It is defined as:
+
+    data Type
+        = Void
+        | Int8
+        | Int16
+        | Int32
+        | Int64
+        | UInt8
+        | UInt16
+        | UInt32
+        | UInt64
+        | Flt
+        | Dbl
+        | Bytes Int
+        deriving (Show)
+
+So far, there is only a default filter for Integer comparison / equality.
+
+You can construct this filter by running
+
+    import qualified PeepingTom.Filters as Filters
+    let fltr_eq = Filters.eqInt 47 -- This will create a filter that selects all regions of memory that contain the value 47 as Int8, Int16, Int32 or Int64
+    let fltr_geq = Filters.compareInt (>= 32) -- This will create a filter that selects all reigons of memory that contain a value greather than 32 as Int8, Int16, Int32 or Int64.
+
+Prefer 'Filters.eqInt x' over 'Filters.compareInt (== x)'. It is faster, since it compares ByteStrings instead of relying on a cast.
+
+Once you have a filter, you can perform an initial scan by running scanMap
+
+    scanMap :: [Type] -> Filters.Filter -> Maps.MapInfo -> IO PeepState
+
+To use scanMap, you need to specify a list of possible types, a filter and the map info obtained by 'getMapInfo'.
+
+The following is an example:
+
+    import qualified PeepingTom.Type as T
+    import qualified PeepingTom.State as State
+    import qualified PeepingTom.Filters as Filters
+    import qualified PeepingTom.Maps as Maps
+
+    let pid = 12345678
+    map_all <- Maps.getMapInfo pid
+    let rfltr = defaultFilter map_all
+    let map = filterMap rfltr map_all
+    
+    let cfltr = Filters.eqInt 42
+    ptstate <- State.scanMap [T.Int32, T.Int64] cfltr map
+
+The result is an object PeepState, defined as:
+
+    data PeepState = PeepState
+    { psPID :: PID
+    , psCandidates :: [Candidate]
+    , psRegions :: Maps.MapInfo
+    }
+
+### Refining the search
+
+If you are interested in refining your search, you need to
+
+1. Update the peep state
+2. Refilter the results
+
+You can do this by running:
+
+    state' <- updateState 1000 state
+
+updateState will read chunks of memory, as opposed to just the necessary bytes for each candidate. You can pass the chunk_size as the first argument.
+
+Once you have updated your values, you can simply re-run your filter
+
+    let fltr = Filters.eqInt 33
+    let fstate = applyFilter fltr state'
+
+### Setting values
+
+Once you have refined your search enough, you may be interested in setting the memory addresses to a specific value. Since PeepState can hold addresses of various types, each with a different type length, you will need a writer. A writer is defined as
+
+    type Writer = Type -> BS.ByteString
+
+There is an implementation for a signed integer writer in PeepingTom.Writer
+
+The following is an example of its usage:
+
+    import qualified PeepingTom.Writer as Writer
+    
+    let writer = Writer.writeInt 127
+    State.applyWriter writer fstate
+
+This will set each address in fstate to be equal to 127, taking into consideration the size of the data being stored in each address. 
 
 [1]: https://github.com/scanmem/scanmem
 [2]: https://www.cheatengine.org/
