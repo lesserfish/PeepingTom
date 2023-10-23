@@ -7,6 +7,8 @@ module PeepingTom.State (
     applyWriter,
     scanMapS,
     scanMap,
+    candidateCount,
+    regionCount,
 ) where
 
 import Control.Exception
@@ -251,3 +253,9 @@ scanMapS chunk_size types fltr map = do
 
 scanMap :: [Type] -> Filters.Filter -> Maps.MapInfo -> IO PeepState
 scanMap = scanMapS 10000
+
+candidateCount :: PeepState -> Int
+candidateCount = length . psCandidates
+
+regionCount :: PeepState -> Int
+regionCount = length . Maps.miRegions . psRegions

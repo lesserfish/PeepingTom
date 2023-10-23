@@ -18,12 +18,19 @@ mySettings cmd =
         , autoAddHistory = True
         }
 
+getPrefixHelper :: String -> String
+getPrefixHelper "default" = ""
+getPrefixHelper str = str
+
+getPrefix :: State -> String
+getPrefix st = getPrefixHelper (sCurrentState st)
+
 run :: State -> IO ()
 run initState = runInputT (mySettings commands) (loop initState)
   where
     loop :: State -> InputT IO ()
     loop state = do
-        minput <- getInputLine "(0) > "
+        minput <- getInputLine (printf "%s > " (getPrefix state))
         case minput of
             Nothing -> return ()
             Just "exit" -> return ()
