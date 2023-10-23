@@ -84,7 +84,7 @@ The scan will send a SIGSTOP before starting, and a SIGCONT when it ends. This c
 
 ### Future scans
 
-Future scans can be done similarly to initial scans, by simple running
+Future scans can be done similarly, by simply running
 
     > $ == 23
 
@@ -94,7 +94,7 @@ To list the available candidates you can run:
 
     > list state
 
-This will show you up to 5 regions and up to 5 candidates. You can specify the number of regions / candidates by adding arguments to 'list state'
+This will show you up to 5 regions and up to 5 candidates. You can specify the number of candidates / regions by adding arguments to 'list state'
 
     > list state 10 2
 
@@ -108,7 +108,7 @@ This will read the virtual memory, and update the values of each candidates. It 
 
 ### Setting values
 
-Once you have filtered the virtual memory, and isolated your addresses of interest, you may want to set the addresses to a current value.
+Once you have filtered the virtual memory, and isolated your addresses of interest, you may want to set the addresses to a specific value.
 
 Currently, you can only set the memory value to an integer value. You can do this by running
 
@@ -126,6 +126,10 @@ You load the saved scan by running
 
     > load name
 
+You can create a new scan by running
+
+    > new name
+    
 Different sessions can scan different processes. For example,
 
     > pid 12345678
@@ -141,7 +145,7 @@ You can reset the current session by running reset
 
     civ5 > reset
 
-The following scann will then be equivalent to a initial scan. To see a list of saved scans, you can run
+The following scan will then be equivalent to a initial scan. To see a list of saved scans, you can run
 
     > show memory
 
@@ -153,7 +157,7 @@ You can set the type of interest by running
 
 So far, only Int64, Int32, Int16 and Int8 are supported.
 
-PeepingTom scans the regions of virtual memory by reading chunks of memory, and then scanning each chunk before loading the next chunk. You can set the size of chunks being loaded by running
+PeepingTom scans the regions of virtual memory by reading chunks of memory, and then filtering the addresses in each chunk before loading the next chunk. You can set the size of chunks being loaded by running
 
     > set chunk_size 1000
 
