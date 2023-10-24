@@ -12,6 +12,7 @@ data Options = Options
     { oScanTypes :: [PTType.Type]
     , oRFilter :: RFilter
     , oChunkSize :: Int
+    , oSendStopSig :: Bool
     }
 
 data State = State
@@ -27,10 +28,11 @@ defaultOptions =
         { oScanTypes = PTType.intTypes
         , oRFilter = RFDefault
         , oChunkSize = 10000
+        , oSendStopSig = True
         }
 
 instance Show Options where
-    show (Options types fltr chunk_size) = printf "Types: %s\nFilter: %s\nChunk size: %s bytes\n" (show types) (show fltr) (show chunk_size)
+    show (Options types fltr chunk_size stop_sig) = printf "Types: %s\nFilter: %s\nChunk size: %s bytes\nSend Stop Signal: %s" (show types) (show fltr) (show chunk_size) (show stop_sig)
 
 emptyState :: State
 emptyState =

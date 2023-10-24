@@ -119,11 +119,14 @@ filterMap RFDefault map = PTMap.filterMap (PTMap.defaultFilter map) map
 scanNew :: PTFilter.Filter -> State -> IO State
 scanNew fltr state = do
     let types = (oScanTypes . sOptions $ state)
+    let stopsig = (oSendStopSig . sOptions $ state)
+    let chunk_size = (oChunkSize . sOptions $ state)
+    let options = PTState.ScanOptions chunk_size stopsig
     let pid = sPID state
     let stateName = sCurrentState state
     all_maps <- PTMap.getMapInfo pid
     let maps = filterMap (oRFilter . sOptions $ state) all_maps
-    ptstate <- PTState.scanMapS (oChunkSize . sOptions $ state) (types) fltr maps
+    ptstate <- PTState.scanMapS options types fltr maps
     putStrLn $ PTState.showState 5 5 ptstate
     let newmap = Map.insert stateName ptstate (sStates state) :: PTMap
     let newstate = state{sStates = newmap}
@@ -136,8 +139,11 @@ scanAction' fltr state = do
     case maybePTState of
         Nothing -> scanNew fltr state
         Just ptState -> do
-            let chunk_size = oChunkSize . sOptions $ state
-            ptUpdated <- PTState.updateState chunk_size ptState
+            let stopsig = (oSendStopSig . sOptions $ state)
+            let chunk_size = (oChunkSize . sOptions $ state)
+            let options = PTState.ScanOptions chunk_size stopsig
+
+            ptUpdated <- PTState.updateStateS options ptState
             let ptFiltered = PTState.applyFilter fltr ptUpdated
             putStrLn $ PTState.showState 5 5 ptFiltered
             let newmap = Map.adjust (\_ -> ptFiltered) stateName (sStates state) :: PTMap
@@ -501,7 +507,11 @@ updateAction args state = do
                     putStrLn $ "State has not been initialized yet. Perform an initial scan before attempting to update it."
                     return state
                 Just ptstate -> do
-                    ptstate' <- PTState.updateState (oChunkSize . sOptions $ state) ptstate
+                    let stopsig = (oSendStopSig . sOptions $ state)
+                    let chunk_size = (oChunkSize . sOptions $ state)
+                    let options = PTState.ScanOptions chunk_size stopsig
+
+                    ptstate' <- PTState.updateStateS options ptstate
                     putStrLn $ PTState.showState 5 5 ptstate'
                     let newmap = Map.adjust (\_ -> ptstate') stateName (sStates state) :: PTMap
                     let new_state = state{sStates = newmap}
@@ -537,7 +547,11 @@ intSetAction args state = do
                     putStrLn $ "State has not been initialized yet. Perform an initial scan before attempting to intSet."
                     return state
                 Just ptstate -> do
-                    ptstate' <- PTState.applyWriter writer ptstate
+                    let stopsig = (oSendStopSig . sOptions $ state)
+                    let chunk_size = (oChunkSize . sOptions $ state)
+                    let options = PTState.ScanOptions chunk_size stopsig
+
+                    ptstate' <- PTState.applyWriter writer options ptstate
                     let newmap = Map.adjust (\_ -> ptstate') stateName (sStates state) :: PTMap
                     let new_state = state{sStates = newmap}
                     return new_state
@@ -667,12 +681,75 @@ setTypeCommand =
         , help = setTypeHelp
         }
 
+setSigStopHelper :: String -> Maybe Bool
+setSigStopHelper "true" = Just True
+setSigStopHelper "false" = Just False
+setSigStopHelper _ = Nothing
+
+setSigStopAction :: [String] -> State -> IO State
+setSigStopAction args state = do
+    if length args /= 1
+        then do
+            putStrLn $ "set sig_stop requires one argument: true or false"
+            putStrLn $ setSigStopHelp
+            return state
+        else do
+            let arg = args !! 0
+            let maybebool = setSigStopHelper (map toLower arg)
+            case maybebool of
+                Nothing -> do
+                    putStrLn $ printf "Could not understand %s" arg
+                    return state
+                Just sigstop -> do
+                    let new_options = (sOptions state){oSendStopSig = sigstop}
+                    let newstate = state{sOptions = new_options}
+                    return newstate
+
+setSigStopHelp :: String
+setSigStopHelp = "\nset send_stopsig: Sets whether or not PeepingTop stops an application before scanning/writting to its virtual memory.\n\nUsage:\n\tset send_stopsig [Bool]"
+
+setSigStopCommand =
+    ACommand
+        { cName = "send_stopig"
+        , action = setSigStopAction
+        , help = setSigStopHelp
+        }
+
+setChunkSizeAction :: [String] -> State -> IO State
+setChunkSizeAction args state = do
+    if length args /= 1
+        then do
+            putStrLn $ "set chunk_size requires one integer argument"
+            putStrLn $ setChunkSizeHelp
+            return state
+        else do
+            let arg = args !! 0
+            let maybeint = readMaybe arg :: Maybe Int
+            case maybeint of
+                Nothing -> do
+                    putStrLn $ printf "Could not understand %s" arg
+                    return state
+                Just chunk_size -> do
+                    let new_options = (sOptions state){oChunkSize = chunk_size}
+                    let newstate = state{sOptions = new_options}
+                    return newstate
+
+setChunkSizeHelp :: String
+setChunkSizeHelp = "\nset chunk_size: Sets the size of chunks being read by PeepingTom.\n\nUsage:\n\tset chunk_size [Integer]"
+
+setChunkSizeCommand =
+    ACommand
+        { cName = "chunk_size"
+        , action = setChunkSizeAction
+        , help = setChunkSizeHelp
+        }
+
 setHelp :: String
-setHelp = "\nset: Sets various scan options.\n\nUsage:\n\tset [option] [args]\nPossible Options: type, chunk_size."
+setHelp = "\nset: Sets various scan options.\n\nUsage:\n\tset [option] [args]\nPossible Options: type, chunk_size, send_stopsig."
 setCommand =
     HCommand
         { cName = "set"
-        , subcommands = [setTypeCommand]
+        , subcommands = [setTypeCommand, setSigStopCommand, setChunkSizeCommand]
         , help = setHelp
         }
 

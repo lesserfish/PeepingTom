@@ -1,9 +1,12 @@
 module PeepingTom.State (
     Candidate (..),
     PeepState (..),
+    ScanOptions (..),
+    defaultScanOptions,
     showState,
     applyFilter,
     updateState,
+    updateStateS,
     applyWriter,
     scanMapS,
     scanMap,
@@ -42,6 +45,15 @@ data PeepState = PeepState
     , psCandidates :: [Candidate]
     , psRegions :: Maps.MapInfo
     }
+
+data ScanOptions = ScanOptions
+    { soChunkSize :: Size
+    , soSIGSTOP :: Bool
+    }
+    deriving (Show)
+
+defaultScanOptions :: ScanOptions
+defaultScanOptions = ScanOptions 10000 True
 
 instance Show Candidate where
     show candidate =
@@ -120,42 +132,45 @@ filterAddress types fltr regid chunk offset = output
             }
     output = if length candidate_types == 0 then Nothing else Just new_candidate
 
-regionScanHelper :: IO.RInterface -> [Type] -> Filters.Filter -> Size -> (Address, Address) -> Int -> IO [Candidate]
-regionScanHelper rinterface types fltr regid (start_address, end_address) chunk_size = do
+regionScanHelper :: IO.RInterface -> [Type] -> Filters.Filter -> Size -> (Address, Address) -> ScanOptions -> IO [Candidate]
+regionScanHelper rinterface types fltr regid (start_address, end_address) scopt = do
     if start_address >= end_address
         then return []
         else do
+            let chunk_size = soChunkSize scopt
             let max_size = maxSizeOf types
             let offset_size = min (end_address - start_address) chunk_size
             let read_size = min (end_address - start_address) (chunk_size + max_size)
             let offset = [0 .. offset_size]
-            tail <- regionScanHelper rinterface types fltr regid (start_address + offset_size + 1, end_address) chunk_size
+            tail <- regionScanHelper rinterface types fltr regid (start_address + offset_size + 1, end_address) scopt
             chunk <- rinterface start_address read_size
             let candidates = mapMaybe (filterAddress types fltr regid chunk) offset
             evaluate candidates
             return $ candidates ++ tail
 
-regionScan :: IO.RInterface -> [Type] -> Filters.Filter -> Maps.Region -> Size -> IO [Candidate]
-regionScan rinterface types fltr region chunk_size = do
+regionScan :: IO.RInterface -> [Type] -> Filters.Filter -> Maps.Region -> ScanOptions -> IO [Candidate]
+regionScan rinterface types fltr region scopt = do
     let rid = Maps.rID region
     let sa = Maps.rStartAddr region
     let ea = Maps.rEndAddr region
-    candidates <- regionScanHelper rinterface types fltr rid (sa, ea) chunk_size
+    candidates <- regionScanHelper rinterface types fltr rid (sa, ea) scopt
     return candidates
 
 regionScanLog :: Maps.Region -> [Candidate] -> IO ()
 regionScanLog reg result = do
     if length result == 0 then return () else putStrLn $ printf "Extracted %4d candidates from Region %4d (size = %8x)" (length result) (Maps.rID reg) ((Maps.rEndAddr reg) - (Maps.rStartAddr reg))
 
-scanMapHelper :: Size -> [Type] -> Filters.Filter -> Maps.MapInfo -> IO [Candidate]
-scanMapHelper chunk_size types fltr map = do
+scanMapHelper :: ScanOptions -> [Type] -> Filters.Filter -> Maps.MapInfo -> IO [Candidate]
+scanMapHelper scopt types fltr map = do
+    let stopsig = soSIGSTOP scopt
     let pid = Maps.miPID map
     let regions = Maps.miRegions map
     candidates <-
         IO.withRInterface
             pid
+            stopsig
             ( \rinterface -> do
-                let action = vocal regionScanLog (\x -> regionScan rinterface types fltr x chunk_size) :: Maps.Region -> IO [Candidate]
+                let action = vocal regionScanLog (\x -> regionScan rinterface types fltr x scopt) :: Maps.Region -> IO [Candidate]
                 fc <- forM regions action :: IO [[Candidate]]
                 return $ concat fc
             )
@@ -180,9 +195,10 @@ updateCandidatesHelper rinterface (current : rest) memory_chunk = do
             new_chunk <- rinterface new_chunk_addr chunk_size
             updateCandidatesHelper rinterface (current : rest) new_chunk
 
-updateCandidates :: IO.RInterface -> Int -> [Candidate] -> IO [Candidate]
+updateCandidates :: IO.RInterface -> ScanOptions -> [Candidate] -> IO [Candidate]
 updateCandidates _ _ [] = return []
-updateCandidates rinterface chunk_size candidates = do
+updateCandidates rinterface scopt candidates = do
+    let chunk_size = soChunkSize scopt
     let initial = candidates !! 0
     let new_chunk_addr = cAddress initial
     chunk <- rinterface new_chunk_addr chunk_size
@@ -229,30 +245,35 @@ applyFilter fltr state = output
     candidates' = mapMaybe (candidateFilter fltr) (psCandidates state)
     output = state{psCandidates = candidates'}
 
-updateState :: Size -> PeepState -> IO PeepState
-updateState chunk_size state = do
+updateStateS :: ScanOptions -> PeepState -> IO PeepState
+updateStateS scopt state = do
     let pid = psPID state
+    let stopsig = soSIGSTOP scopt
     let candidates = psCandidates state
-    let action = (\rinterface -> updateCandidates rinterface chunk_size candidates) :: IO.RInterface -> IO [Candidate]
-    candidates' <- IO.withRInterface pid action
+    let action = (\rinterface -> updateCandidates rinterface scopt candidates) :: IO.RInterface -> IO [Candidate]
+    candidates' <- IO.withRInterface pid stopsig action
     return $ state{psCandidates = candidates'}
 
-applyWriter :: Writer.Writer -> PeepState -> IO PeepState
-applyWriter writer peepstate = do
+updateState :: PeepState -> IO PeepState
+updateState = updateStateS (defaultScanOptions)
+
+applyWriter :: Writer.Writer -> ScanOptions -> PeepState -> IO PeepState
+applyWriter writer scopt peepstate = do
+    let stopsig = soSIGSTOP scopt
     let pid = psPID peepstate
     let candidates = psCandidates peepstate
     let action = (\winterface -> applyWriterHelper winterface writer candidates) :: (IO.WInterface -> IO [Candidate])
-    candidates' <- IO.withWInterface pid action
+    candidates' <- IO.withWInterface pid stopsig action
     return $ peepstate{psCandidates = candidates'}
 
-scanMapS :: Size -> [Type] -> Filters.Filter -> Maps.MapInfo -> IO PeepState
-scanMapS chunk_size types fltr map = do
+scanMapS :: ScanOptions -> [Type] -> Filters.Filter -> Maps.MapInfo -> IO PeepState
+scanMapS scopt types fltr map = do
     let pid = (Maps.miPID map)
-    candidates <- scanMapHelper chunk_size types fltr map
+    candidates <- scanMapHelper scopt types fltr map
     return PeepState{psPID = pid, psCandidates = candidates, psRegions = map}
 
 scanMap :: [Type] -> Filters.Filter -> Maps.MapInfo -> IO PeepState
-scanMap = scanMapS 10000
+scanMap = scanMapS defaultScanOptions
 
 candidateCount :: PeepState -> Int
 candidateCount = length . psCandidates

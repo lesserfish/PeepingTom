@@ -32,18 +32,18 @@ closeFile fd = do
 -- Attaching implies
 -- 1. Sending a SIGSTOP to the process
 -- 2. Opening a file descriptor to /proc/pid/mem
-attach :: PID -> Posix.ACCESS_MODE -> IO FD
-attach pid mode = do
-    _ <- Posix.kill pid Posix.SIGSTOP
+attach :: PID -> Posix.ACCESS_MODE -> Bool -> IO FD
+attach pid mode stopsig = do
+    _ <- if stopsig then Posix.kill pid Posix.SIGSTOP else return 0
     openFile (memFile pid) mode
 
 -- Dettaching implies
 -- 1. Sending a SIGCONT to the process
 -- 2. Closing the file descriptor associated to /proc/pid/mem
-dettach :: (PID, FD) -> IO ()
-dettach (pid, fd) = do
+dettach :: (PID, FD) -> Bool -> IO ()
+dettach (pid, fd) contsig = do
     closeFile fd
-    _ <- Posix.kill pid Posix.SIGCONT
+    _ <- if contsig then Posix.kill pid Posix.SIGCONT else return 0
     return ()
 
 loadMemoryChunk :: FD -> Address -> Size -> IO MemoryChunk
@@ -58,21 +58,21 @@ writeInterface fd addr bs = do
     _ <- Posix.pwrite fd bs addr -- TODO: Handle errors in here maybe?
     return ()
 
-withWInterface :: PID -> (WInterface -> IO a) -> IO a
-withWInterface pid action = do
-    fd <- attach pid Posix.O_WRONLY
+withWInterface :: PID -> Bool -> (WInterface -> IO a) -> IO a
+withWInterface pid stopsig action = do
+    fd <- attach pid Posix.O_WRONLY stopsig
     let winterface = writeInterface fd
     output <- action winterface
-    dettach (pid, fd)
+    dettach (pid, fd) stopsig
     return output
 
 readInterface :: FD -> RInterface
 readInterface fd addr size = loadMemoryChunk fd addr size
 
-withRInterface :: PID -> (RInterface -> IO a) -> IO a
-withRInterface pid action = do
-    fd <- attach pid Posix.O_RDONLY
+withRInterface :: PID -> Bool -> (RInterface -> IO a) -> IO a
+withRInterface pid stopsig action = do
+    fd <- attach pid Posix.O_RDONLY stopsig
     let cinterface = readInterface fd
     output <- action cinterface
-    dettach (pid, fd)
+    dettach (pid, fd) stopsig
     return output

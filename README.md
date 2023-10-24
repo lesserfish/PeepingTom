@@ -317,9 +317,7 @@ If you are interested in refining your search, you need to
 
 You can do this by running:
 
-    state' <- updateState 1000 state
-
-updateState will read chunks of memory, as opposed to just the necessary bytes for each candidate. You can pass the chunk_size as the first argument.
+    state' <- updateState state
 
 Once you have updated your values, you can simply re-run your filter
 
@@ -339,7 +337,7 @@ The following is an example of its usage:
     import qualified PeepingTom.Writer as Writer
     
     let writer = Writer.writeInt 127
-    State.applyWriter writer fstate
+    State.applyWriter writer (State.defaultScanOptions) fstate
 
 This will set each address in fstate to be equal to 127, taking into consideration the size of the data being stored in each address. 
 

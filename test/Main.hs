@@ -100,7 +100,7 @@ test2 = do
                 let fltr = Filters.eqInt 49
                 state <- State.scanMap [(Type.Int64)] fltr maps
                 putStrLn $ printf "Test:\n"
-                _ <- State.applyWriter (Writer.writeInt 3) state
+                _ <- State.applyWriter (Writer.writeInt 3) (State.defaultScanOptions) state
                 scanmem_matches <- get_matches64 pid 49
                 putStrLn $ printf "%d should be 0" scanmem_matches
                 putStrLn $ printf "%s" (if 0 == scanmem_matches then "Success!\n\n" else "Failure :c\n\n")
@@ -119,7 +119,7 @@ test3 = do
                 state <- State.scanMap [(Type.Int64)] fltr maps
                 pause_process pid
                 update_values pid 49 0
-                updated_state <- State.updateState 4096 state
+                updated_state <- State.updateState state
                 let first_elem_value = State.cData ((State.psCandidates updated_state) !! 0)
                 let cast = Conversions.i64FromBS first_elem_value
                 putStrLn $ printf "Test:\n"
