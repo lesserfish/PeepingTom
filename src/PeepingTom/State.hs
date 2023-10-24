@@ -8,6 +8,7 @@ module PeepingTom.State (
     updateState,
     updateStateS,
     applyWriter,
+    applyWriterS,
     scanMapS,
     scanMap,
     candidateCount,
@@ -257,14 +258,17 @@ updateStateS scopt state = do
 updateState :: PeepState -> IO PeepState
 updateState = updateStateS (defaultScanOptions)
 
-applyWriter :: Writer.Writer -> ScanOptions -> PeepState -> IO PeepState
-applyWriter writer scopt peepstate = do
+applyWriterS :: ScanOptions -> Writer.Writer -> PeepState -> IO PeepState
+applyWriterS scopt writer peepstate = do
     let stopsig = soSIGSTOP scopt
     let pid = psPID peepstate
     let candidates = psCandidates peepstate
     let action = (\winterface -> applyWriterHelper winterface writer candidates) :: (IO.WInterface -> IO [Candidate])
     candidates' <- IO.withWInterface pid stopsig action
     return $ peepstate{psCandidates = candidates'}
+
+applyWriter :: Writer.Writer -> PeepState -> IO PeepState
+applyWriter = applyWriterS defaultScanOptions
 
 scanMapS :: ScanOptions -> [Type] -> Filters.Filter -> Maps.MapInfo -> IO PeepState
 scanMapS scopt types fltr map = do

@@ -361,9 +361,6 @@ helpHelp =
     \\n\t $ [filter] [value]:          Scans the memory or update the candidates, and extracts those that satisfy the filter. \
     \\n\t set [option] [args]:         Sets various options regarding the scan. Type 'help set' to see more.\
     \\n\t list [object]:               Lists several objects. To see a list of available objects type 'help list'.\
-    \\n\t delete [object]:             Deletes an object. To see a list of objects that can be deleted type 'help delete'.\
-    \\n\t filter map [filter]:         Filters the list of virtual memory regions. To see a list of available filters type 'list rfilter'.\
-    \\n\t filter candidate [filter]:   Filters the list of candidates. To see a list of available filters type 'list filter'.\
     \\n\t update:                      Update the values of the current candidates.\
     \\n\t save [name]:                 Save the current list of candidates.\
     \\n\t load [name]:                 Loads a list of candidates.\
@@ -551,7 +548,7 @@ intSetAction args state = do
                     let chunk_size = (oChunkSize . sOptions $ state)
                     let options = PTState.ScanOptions chunk_size stopsig
 
-                    ptstate' <- PTState.applyWriter writer options ptstate
+                    ptstate' <- PTState.applyWriterS options writer ptstate
                     let newmap = Map.adjust (\_ -> ptstate') stateName (sStates state) :: PTMap
                     let new_state = state{sStates = newmap}
                     return new_state

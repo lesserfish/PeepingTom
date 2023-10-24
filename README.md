@@ -337,7 +337,7 @@ The following is an example of its usage:
     import qualified PeepingTom.Writer as Writer
     
     let writer = Writer.writeInt 127
-    State.applyWriter writer (State.defaultScanOptions) fstate
+    State.applyWriter writer fstate
 
 This will set each address in fstate to be equal to 127, taking into consideration the size of the data being stored in each address. 
 

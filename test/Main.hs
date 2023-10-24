@@ -100,7 +100,7 @@ test2 = do
                 let fltr = Filters.eqInt 49
                 state <- State.scanMap [(Type.Int64)] fltr maps
                 putStrLn $ printf "Test:\n"
-                _ <- State.applyWriter (Writer.writeInt 3) (State.defaultScanOptions) state
+                _ <- State.applyWriter (Writer.writeInt 3) state
                 scanmem_matches <- get_matches64 pid 49
                 putStrLn $ printf "%d should be 0" scanmem_matches
                 putStrLn $ printf "%s" (if 0 == scanmem_matches then "Success!\n\n" else "Failure :c\n\n")
