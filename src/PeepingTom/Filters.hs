@@ -102,6 +102,7 @@ eqBS bs1 bs2 _ = bs1 == bs2
 compareBS :: (BS.ByteString -> Bool) -> Filter
 compareBS fltr bs2 _ = fltr bs2
 
+{-# INLINE eqBSN #-}
 eqBSN :: Int -> BS.ByteString -> BS.ByteString -> Bool
 eqBSN 0 _ _ = True
 eqBSN n !bsx bsy
@@ -128,12 +129,14 @@ testIBS (i8, i16, i32, i64) bs Int16 = i16 == (BS.take 2 bs)
 testIBS (i8, i16, i32, i64) bs Int32 = i32 == (BS.take 4 bs)
 testIBS (i8, i16, i32, i64) bs Int64 = i64 == (BS.take 8 bs)
 
+{-# INLINE testIBS' #-}
 testIBS' :: (BS.ByteString, BS.ByteString, BS.ByteString, BS.ByteString) -> Filter
 testIBS' (i8, i16, i32, i64) bs Int8 = (eqBSN 1 i8 bs)
 testIBS' (i8, i16, i32, i64) bs Int16 = (eqBSN 2 i16 bs)
 testIBS' (i8, i16, i32, i64) bs Int32 = (eqBSN 4 i32 bs)
 testIBS' (i8, i16, i32, i64) bs Int64 = (eqBSN 8 i64 bs)
 
+{-# INLINE eqInt #-}
 eqInt :: Integer -> Filter
 eqInt value = testIBS' (i8, i16, i32, i64)
   where

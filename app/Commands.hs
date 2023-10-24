@@ -707,7 +707,7 @@ setSigStopHelp = "\nset send_stopsig: Sets whether or not PeepingTop stops an ap
 
 setSigStopCommand =
     ACommand
-        { cName = "send_stopig"
+        { cName = "send_stopsig"
         , action = setSigStopAction
         , help = setSigStopHelp
         }
