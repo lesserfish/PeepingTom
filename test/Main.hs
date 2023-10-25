@@ -78,7 +78,7 @@ test1 = do
             ( \pid -> do
                 all_maps <- Maps.getMapInfo pid
                 let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
-                let fltr = Filters.eqInt 49
+                let fltr = Filters.eqIntX (False, False, False, True) 49
                 state <- State.scanMap [(Type.Int64)] fltr maps
                 pause_process pid
                 let peeptom_matches = length . State.psCandidates $ state
@@ -97,7 +97,7 @@ test2 = do
             ( \pid -> do
                 all_maps <- Maps.getMapInfo pid
                 let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
-                let fltr = Filters.eqInt 49
+                let fltr = Filters.eqIntX (False, False, False, True) 49
                 state <- State.scanMap [(Type.Int64)] fltr maps
                 putStrLn $ printf "Test:\n"
                 _ <- State.applyWriter (Writer.writeInt 3) state
@@ -115,7 +115,7 @@ test3 = do
             ( \pid -> do
                 all_maps <- Maps.getMapInfo pid
                 let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
-                let fltr = Filters.eqInt 49
+                let fltr = Filters.eqIntX (False, False, False, True) 49
                 state <- State.scanMap [(Type.Int64)] fltr maps
                 pause_process pid
                 update_values pid 49 0
