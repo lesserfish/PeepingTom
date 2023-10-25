@@ -2,24 +2,16 @@
 
 module PeepingTom.Filters (
     Filter,
-    isI8,
-    isI16,
-    isI32,
-    isI64,
-    isU8,
-    isU16,
-    isU32,
-    isU64,
-    isFlt,
-    isDbl,
-    eqInt,
     compareBS,
-    compareInt,
+    eqInt,
+    eqInt',
+    eqIntd,
+    eqIntX,
 ) where
 
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Unsafe as BSUnsafe
 import Data.Functor ((<$>))
+import qualified Data.Int as I
 import Data.List (any, intersperse)
 import Data.Maybe (Maybe, fromMaybe)
 import Data.Typeable (Typeable, typeOf)
@@ -28,47 +20,8 @@ import PeepingTom.Conversions
 import PeepingTom.Type
 import Text.Printf
 
-type Filter = BS.ByteString -> Type -> Bool
-
-isI8 :: Filter
-isI8 _ Int8 = True
-isI8 _ _ = False
-
-isI16 :: Filter
-isI16 _ Int16 = True
-isI16 _ _ = False
-
-isI32 :: Filter
-isI32 _ Int32 = True
-isI32 _ _ = False
-
-isI64 :: Filter
-isI64 _ Int64 = True
-isI64 _ _ = False
-
-isU8 :: Filter
-isU8 _ UInt8 = True
-isU8 _ _ = False
-
-isU16 :: Filter
-isU16 _ UInt16 = True
-isU16 _ _ = False
-
-isU32 :: Filter
-isU32 _ UInt32 = True
-isU32 _ _ = False
-
-isU64 :: Filter
-isU64 _ UInt64 = True
-isU64 _ _ = False
-
-isFlt :: Filter
-isFlt _ Flt = True
-isFlt _ _ = False
-
-isDbl :: Filter
-isDbl _ Dbl = True
-isDbl _ _ = False
+data Filter' = Filter' {fFilter :: Filter, maxSizeOf :: Int}
+type Filter = BS.ByteString -> [Type]
 
 castInteger :: Type -> BS.ByteString -> Maybe Integer
 castInteger Int8 b = Just . toInteger $ i8FromBS b
@@ -90,44 +43,96 @@ compareInt' fltr bs t = fltr <$> (ifLargeEnough t bs (castInteger t bs))
 bsToString :: BS.ByteString -> String
 bsToString bs = concat $ intersperse " " (fmap (printf "0x%02X") (BS.unpack bs))
 
-compareInt :: (Integer -> Bool) -> Filter
-compareInt fltr bs t = output
-  where
-    output = fromMaybe False (compareInt' fltr bs t)
+-- compareInt :: (Integer -> Bool) -> Filter
+-- compareInt fltr bs = output
+--  where
+--    output = fromMaybe False (compareInt' fltr bs t)
 
 -- ByteString
 eqBS :: BS.ByteString -> Filter
-eqBS bs1 bs2 _ = bs1 == bs2
+eqBS bs1 bs2 = if bs1 == bs2 then [byteType] else []
+  where
+    byteType = Bytes (BS.length bs1)
 
 compareBS :: (BS.ByteString -> Bool) -> Filter
-compareBS fltr bs2 _ = fltr bs2
+compareBS fltr bs = if fltr bs then [byteType] else []
+  where
+    byteType = Bytes (BS.length bs)
 
-eqBSN :: Int -> BS.ByteString -> BS.ByteString -> Bool
-eqBSN 0 _ _ = True
-eqBSN n !bsx bsy
-    | (BS.length bsy) < n = False
+-- Integer Filters
+--
+eqBSN' :: Int -> BS.ByteString -> BS.ByteString -> Bool
+eqBSN' 0 _ _ = True
+eqBSN' n !bsx bsy
     | bx == by = eqBSN (n - 1) (BS.tail bsx) (BS.tail bsy)
     | otherwise = False
   where
     !bx = BS.head bsx
     by = BS.head bsy
 
-testIBS :: (BS.ByteString, BS.ByteString, BS.ByteString, BS.ByteString) -> Filter
-testIBS (i8, i16, i32, i64) bs Int8 = i8 == (BS.take 1 bs)
-testIBS (i8, i16, i32, i64) bs Int16 = i16 == (BS.take 2 bs)
-testIBS (i8, i16, i32, i64) bs Int32 = i32 == (BS.take 4 bs)
-testIBS (i8, i16, i32, i64) bs Int64 = i64 == (BS.take 8 bs)
+eqBSN :: Int -> BS.ByteString -> BS.ByteString -> Bool
+eqBSN n bsx bsy
+    | (BS.length bsy) < n = False
+    | otherwise = eqBSN' n bsx bsy
 
-testIBS' :: (BS.ByteString, BS.ByteString, BS.ByteString, BS.ByteString) -> Filter
-testIBS' (i8, i16, i32, i64) bs Int8 = (eqBSN 1 i8 bs)
-testIBS' (i8, i16, i32, i64) bs Int16 = (eqBSN 2 i16 bs)
-testIBS' (i8, i16, i32, i64) bs Int32 = (eqBSN 4 i32 bs)
-testIBS' (i8, i16, i32, i64) bs Int64 = (eqBSN 8 i64 bs)
+sequenceF :: [Filter] -> Filter
+sequenceF [] _ = []
+sequenceF (f : rest) bs = if flen == 0 then [] else (f bs) ++ sequenceF rest bs
+  where
+    flen = length $ f bs
+
+i8Eq :: BS.ByteString -> Filter
+i8Eq !ibs bs
+    | BS.length bs < 1 = []
+    | otherwise = if (eqBSN 1 ibs bs) then [Int8] else []
+
+i16Eq :: BS.ByteString -> Filter
+i16Eq !ibs bs
+    | BS.length bs < 2 = []
+    | otherwise = if (eqBSN 2 ibs bs) then [Int16] else []
+
+i32Eq :: BS.ByteString -> Filter
+i32Eq !ibs bs
+    | BS.length bs < 4 = []
+    | otherwise = if (eqBSN 4 ibs bs) then [Int32] else []
+
+i64Eq :: BS.ByteString -> Filter
+i64Eq !ibs bs
+    | BS.length bs < 8 = []
+    | otherwise = if (eqBSN 8 ibs bs) then [Int64] else []
 
 eqInt :: Integer -> Filter
-eqInt value = testIBS' (i8, i16, i32, i64)
+eqInt value = sequenceF [i8Eq i8, i16Eq i16, i32Eq i32, i64Eq i64]
   where
     !i8 = i8ToBS (fromInteger value)
     !i16 = i16ToBS (fromInteger value)
     !i32 = i32ToBS (fromInteger value)
     !i64 = i64ToBS (fromInteger value)
+
+eqIntX :: (Bool, Bool, Bool, Bool) -> Integer -> Filter
+eqIntX (i8check, i16check, i32check, i64check) value = sequenceF (i8f ++ i16f ++ i32f ++ i64f)
+  where
+    !i8 = i8ToBS (fromInteger value)
+    !i16 = i16ToBS (fromInteger value)
+    !i32 = i32ToBS (fromInteger value)
+    !i64 = i64ToBS (fromInteger value)
+    !i8f = if i8check then [i8Eq i8] else []
+    !i16f = if i16check then [i16Eq i16] else []
+    !i32f = if i32check then [i32Eq i32] else []
+    !i64f = if i64check then [i64Eq i64] else []
+
+eqInt' :: Integer -> Filter
+eqInt' x
+    | x >= fromIntegral (minBound :: I.Int8) && x <= fromIntegral (maxBound :: I.Int8) = eqIntX (True, True, True, True) x
+    | x >= fromIntegral (minBound :: I.Int16) && x <= fromIntegral (maxBound :: I.Int16) = eqIntX (False, True, True, True) x
+    | x >= fromIntegral (minBound :: I.Int32) && x <= fromIntegral (maxBound :: I.Int32) = eqIntX (False, False, True, True) x
+    | x >= fromIntegral (minBound :: I.Int64) && x <= fromIntegral (maxBound :: I.Int64) = eqIntX (False, False, False, True) x
+    | otherwise = \_ -> []
+
+eqIntd :: Integer -> Int
+eqIntd x
+    | x >= fromIntegral (minBound :: I.Int8) && x <= fromIntegral (maxBound :: I.Int8) = 1
+    | x >= fromIntegral (minBound :: I.Int16) && x <= fromIntegral (maxBound :: I.Int16) = 2
+    | x >= fromIntegral (minBound :: I.Int32) && x <= fromIntegral (maxBound :: I.Int32) = 3
+    | x >= fromIntegral (minBound :: I.Int64) && x <= fromIntegral (maxBound :: I.Int64) = 4
+    | otherwise = 0

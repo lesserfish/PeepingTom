@@ -100,7 +100,7 @@ candidateFilter :: Filters.Filter -> Candidate -> Maybe Candidate
 candidateFilter fltr candidate = output
   where
     bsData = cData $ candidate :: BS.ByteString
-    valid_types = filter (fltr bsData) (cTypes candidate) :: [Type]
+    valid_types = fltr bsData :: [Type]
     output = if length valid_types == 0 then Nothing else candidate'
     max_size = maxSizeOf valid_types
     bsData' = BS.take max_size bsData -- Only store that amount of bytes
@@ -115,12 +115,12 @@ isInChunk candidate chunk = (candidate_addr >= chunk_addr) && (candidate_addr + 
     chunk_addr = IO.mcStartAddr chunk
     chunk_size = IO.mcSize chunk
 
-filterAddress :: [Type] -> Filters.Filter -> Int -> IO.MemoryChunk -> Address -> Maybe Candidate
-filterAddress types fltr regid chunk offset = output
+filterAddress :: Filters.Filter -> Int -> IO.MemoryChunk -> Address -> Maybe Candidate
+filterAddress fltr regid chunk offset = output
   where
     address = (IO.mcStartAddr chunk) + offset
     bytes = BS.drop offset (IO.mcData chunk) -- Get all the bytes starting from offset
-    candidate_types = filter (fltr bytes) types :: [Type]
+    candidate_types = fltr bytes :: [Type]
     max_size = maxSizeOf candidate_types
     byte_data = BS.take max_size bytes -- Store this amount of bytes
     region_id = regid
@@ -145,7 +145,7 @@ regionScanHelper rinterface types fltr regid (start_address, end_address) scopt 
             let offset = [0 .. offset_size]
             tail <- regionScanHelper rinterface types fltr regid (start_address + offset_size + 1, end_address) scopt
             chunk <- rinterface start_address read_size
-            let candidates = mapMaybe (filterAddress types fltr regid chunk) offset
+            let candidates = mapMaybe (filterAddress fltr regid chunk) offset
             evaluate candidates
             return $ candidates ++ tail
 
