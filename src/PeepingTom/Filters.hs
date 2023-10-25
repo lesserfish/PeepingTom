@@ -5,8 +5,8 @@ module PeepingTom.Filters (
     compareBS,
     eqInt,
     eqInt',
-    eqIntd,
     eqIntX,
+    compareInt,
 ) where
 
 import qualified Data.ByteString as BS
@@ -129,10 +129,14 @@ eqInt' x
     | x >= fromIntegral (minBound :: I.Int64) && x <= fromIntegral (maxBound :: I.Int64) = eqIntX (False, False, False, True) x
     | otherwise = \_ -> []
 
-eqIntd :: Integer -> Int
-eqIntd x
-    | x >= fromIntegral (minBound :: I.Int8) && x <= fromIntegral (maxBound :: I.Int8) = 1
-    | x >= fromIntegral (minBound :: I.Int16) && x <= fromIntegral (maxBound :: I.Int16) = 2
-    | x >= fromIntegral (minBound :: I.Int32) && x <= fromIntegral (maxBound :: I.Int32) = 3
-    | x >= fromIntegral (minBound :: I.Int64) && x <= fromIntegral (maxBound :: I.Int64) = 4
-    | otherwise = 0
+compareInt :: (Integer -> Bool) -> Filter
+compareInt cmp bs = i8 ++ i16 ++ i32 ++ i64
+  where
+    i8 = if (BS.length bs) < 1 then [] else c8
+    c8 = if cmp . fromIntegral $ i8FromBS bs then [Int8] else []
+    i16 = if (BS.length bs) < 2 then [] else c16
+    c16 = if cmp . fromIntegral $ i16FromBS bs then [Int16] else []
+    i32 = if (BS.length bs) < 4 then [] else c32
+    c32 = if cmp . fromIntegral $ i32FromBS bs then [Int32] else []
+    i64 = if (BS.length bs) < 8 then [] else c64
+    c64 = if cmp . fromIntegral $ i64FromBS bs then [Int64] else []
