@@ -79,7 +79,7 @@ test1 = do
                 all_maps <- Maps.getMapInfo pid
                 let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
                 let fltr = Filters.eqIntX (False, False, False, True) 49
-                state <- State.scanMap [(Type.Int64)] fltr maps
+                state <- State.scanMap fltr maps
                 pause_process pid
                 let peeptom_matches = length . State.psCandidates $ state
                 scanmem_matches <- get_matches64 pid 49
@@ -98,7 +98,7 @@ test2 = do
                 all_maps <- Maps.getMapInfo pid
                 let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
                 let fltr = Filters.eqIntX (False, False, False, True) 49
-                state <- State.scanMap [(Type.Int64)] fltr maps
+                state <- State.scanMap fltr maps
                 putStrLn $ printf "Test:\n"
                 _ <- State.applyWriter (Writer.writeInt 3) state
                 scanmem_matches <- get_matches64 pid 49
@@ -116,7 +116,7 @@ test3 = do
                 all_maps <- Maps.getMapInfo pid
                 let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
                 let fltr = Filters.eqIntX (False, False, False, True) 49
-                state <- State.scanMap [(Type.Int64)] fltr maps
+                state <- State.scanMap fltr maps
                 pause_process pid
                 update_values pid 49 0
                 updated_state <- State.updateState state
@@ -137,7 +137,7 @@ test4 = do
                 all_maps <- Maps.getMapInfo pid
                 let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
                 let fltr = Filters.eqInt 49
-                state <- State.scanMap [Type.Int64, Type.Int32, Type.Int16, Type.Int8] fltr maps
+                state <- State.scanMap fltr maps
                 pause_process pid
                 let peeptom_matches = length . State.psCandidates $ state
                 scanmem_matches <- get_matchesi pid 49

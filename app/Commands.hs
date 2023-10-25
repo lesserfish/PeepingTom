@@ -116,7 +116,7 @@ pidCommand =
 filterMap :: RFilter -> PTMap.MapInfo -> PTMap.MapInfo
 filterMap RFDefault map = PTMap.filterMap (PTMap.defaultFilter map) map
 
-scanNew :: PTFilter.Filter -> State -> IO State
+scanNew :: PTFilter.FilterInfo -> State -> IO State
 scanNew fltr state = do
     let types = (oScanTypes . sOptions $ state)
     let stopsig = (oSendStopSig . sOptions $ state)
@@ -126,13 +126,13 @@ scanNew fltr state = do
     let stateName = sCurrentState state
     all_maps <- PTMap.getMapInfo pid
     let maps = filterMap (oRFilter . sOptions $ state) all_maps
-    ptstate <- PTState.scanMapS options types fltr maps
+    ptstate <- PTState.scanMapS options fltr maps
     putStrLn $ PTState.showState 5 5 ptstate
     let newmap = Map.insert stateName ptstate (sStates state) :: PTMap
     let newstate = state{sStates = newmap}
     return newstate
 
-scanAction' :: PTFilter.Filter -> State -> IO State
+scanAction' :: PTFilter.FilterInfo -> State -> IO State
 scanAction' fltr state = do
     let stateName = sCurrentState (state) :: String
     let maybePTState = Map.lookup stateName (sStates state) :: Maybe PTState.PeepState
@@ -150,7 +150,7 @@ scanAction' fltr state = do
             let new_state = state{sStates = newmap}
             return new_state
 
-scanAction :: PTFilter.Filter -> State -> IO State
+scanAction :: PTFilter.FilterInfo -> State -> IO State
 scanAction fltr state = catch (scanAction' fltr state) handler
   where
     handler :: SomeException -> IO State
