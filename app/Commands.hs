@@ -5,7 +5,7 @@ module Commands (
 
 import Control.Exception
 import Data.Char (toLower)
-import Data.List (intersperse)
+import Data.List (elem, intersperse)
 import qualified Data.Map as Map
 import Foreign (new)
 import qualified PeepingTom.Filters as PTFilter
@@ -159,6 +159,14 @@ scanAction fltr state = catch (scanAction' fltr state) handler
         return state
 
 -- ==
+
+getTypes :: [PTType.Type] -> (Bool, Bool, Bool, Bool)
+getTypes types = (i8, i16, i32, i64)
+  where
+    i8 = elem (PTType.Int8) types
+    i16 = elem (PTType.Int16) types
+    i32 = elem (PTType.Int32) types
+    i64 = elem (PTType.Int64) types
 eqAction :: [String] -> State -> IO State
 eqAction args state = do
     if length args /= 1
@@ -169,7 +177,8 @@ eqAction args state = do
         else do
             let numstr = args !! 0
             let num = read numstr :: Integer
-            let fltr = PTFilter.eqInt num
+            let types = getTypes . oScanTypes . sOptions $ state
+            let fltr = PTFilter.eqIntX types num
             new_state <- scanAction fltr state
             return new_state
 

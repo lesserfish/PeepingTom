@@ -19,7 +19,7 @@ data Type
     | Flt
     | Dbl
     | Bytes Int
-    deriving (Show)
+    deriving (Show, Eq)
 
 sizeOf :: Type -> Size
 sizeOf Void = 0
