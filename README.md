@@ -250,7 +250,7 @@ We are interested in extracting the addresses in virtual memory that satisfy a s
 
 The filters need to be of type: 
     
-    type Filter = BS.ByteString -> Type -> Bool
+    type Filter = BS.ByteString -> [Type]
 
 where Type is a custom data type defined in PeepingTom.Type. It is defined as:
 
@@ -269,7 +269,7 @@ where Type is a custom data type defined in PeepingTom.Type. It is defined as:
         | Bytes Int
         deriving (Show)
 
-So far, there is only a default filter for Integer comparison / equality.
+So far, there are only filters for Integer comparison / equality.
 
 You can construct this filter by running
 
@@ -279,11 +279,20 @@ You can construct this filter by running
 
 Prefer 'Filters.eqInt x' over 'Filters.compareInt (== x)'. It is faster, since it compares ByteStrings instead of relying on a cast.
 
+These filters will try to find signed integers of any width that satisfy the condition. It will match Int8, Int16, Int32 or Int64.
+
+If you are interested in searching for a specific data type you can use
+
+    eqIntX :: (Bool, Bool, Bool, Bool) -> Integer -> Filter
+    eqIntX (search_i8, search_i16, search_i32, search_i64) value = ....
+
+With this filter you can specify which widths of signed integer you are interested in.
+
 Once you have a filter, you can perform an initial scan by running scanMap
 
-    scanMap :: [Type] -> Filters.Filter -> Maps.MapInfo -> IO PeepState
+    scanMap :: Filters.Filter -> Maps.MapInfo -> IO PeepState
 
-To use scanMap, you need to specify a list of possible types, a filter and the map info obtained by 'getMapInfo'.
+To use scanMap, you need to specify a filter and the map info obtained by 'getMapInfo'.
 
 The following is an example:
 
@@ -298,7 +307,7 @@ The following is an example:
     let map = filterMap rfltr map_all
     
     let cfltr = Filters.eqInt 42
-    ptstate <- State.scanMap [T.Int32, T.Int64] cfltr map
+    ptstate <- State.scanMap cfltr map
 
 The result is an object PeepState, defined as:
 
