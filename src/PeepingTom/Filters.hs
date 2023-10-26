@@ -8,13 +8,17 @@ module PeepingTom.Filters (
     eqInt',
     eqIntX,
     compareInt,
+    compareIntX,
     i8Eq,
     i16Eq,
     i32Eq,
     i64Eq,
+    eqStr,
+    eqBS,
 ) where
 
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BSC
 import Data.Functor ((<$>))
 import qualified Data.Int as I
 import Data.List (any, intersperse)
@@ -54,18 +58,28 @@ bsToString bs = concat $ intersperse " " (fmap (printf "0x%02X") (BS.unpack bs))
 --    output = fromMaybe False (compareInt' fltr bs t)
 
 -- ByteString
-eqBS :: BS.ByteString -> Filter
-eqBS bs1 bs2 = if bs1 == bs2 then [byteType] else []
+eqBS' :: BS.ByteString -> Filter
+eqBS' bs1 bs2 = if bs1 == bs2 then [byteType] else []
   where
     byteType = Bytes (BS.length bs1)
+
+eqBS :: BS.ByteString -> FilterInfo
+eqBS bs1 = (eqBS' bs1, BS.length bs1)
 
 compareBS :: (BS.ByteString -> Bool) -> Filter
 compareBS fltr bs = if fltr bs then [byteType] else []
   where
     byteType = Bytes (BS.length bs)
 
+eqStr' :: String -> Filter
+eqStr' str = eqBS' bs
+  where
+    !bs = BSC.pack str
+
+eqStr :: String -> FilterInfo
+eqStr bs = (eqStr' bs, length bs)
+
 -- Integer Filters
---
 eqBSN' :: Int -> BS.ByteString -> BS.ByteString -> Bool
 eqBSN' 0 _ _ = True
 eqBSN' n !bsx bsy
@@ -204,3 +218,20 @@ fcompareInt cmp bs = i8 ++ i16 ++ i32 ++ i64
 
 compareInt :: (Integer -> Bool) -> FilterInfo
 compareInt c = (fcompareInt c, 8)
+
+fcompareIntX :: (Bool, Bool, Bool, Bool) -> (Integer -> Bool) -> Filter
+fcompareIntX !(i8check, i16check, i32check, i64check) cmp bs = i8 ++ i16 ++ i32 ++ i64
+  where
+    i8 = if i8check && (BS.length bs) < 1 then [] else c8
+    c8 = if cmp . fromIntegral $ i8FromBS bs then [Int8] else []
+    i16 = if i16check && (BS.length bs) < 2 then [] else c16
+    c16 = if cmp . fromIntegral $ i16FromBS bs then [Int16] else []
+    i32 = if i32check && (BS.length bs) < 4 then [] else c32
+    c32 = if cmp . fromIntegral $ i32FromBS bs then [Int32] else []
+    i64 = if i64check && (BS.length bs) < 8 then [] else c64
+    c64 = if cmp . fromIntegral $ i64FromBS bs then [Int64] else []
+
+compareIntX :: (Bool, Bool, Bool, Bool) -> (Integer -> Bool) -> FilterInfo
+compareIntX !(i8check, i16check, i32check, i64check) cmp = (fcompareIntX (i8check, i16check, i32check, i64check) cmp, s)
+  where
+    s = if i64check then 8 else if i32check then 4 else if i16check then 2 else if i8check then 1 else 0

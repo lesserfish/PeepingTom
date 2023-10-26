@@ -89,7 +89,7 @@ pread fd count offset = do
             let csOffset = fromIntegral offset :: CSize
             ciBytes_read <- raw_pread ciFD buffer csBufsize csOffset
             let iBytes_read = fromIntegral ciBytes_read :: Int
-            if (iBytes_read) < 0 then (throw $ PosixException (printf "Could not read file with PID %d. Are you sure you have the permission?" fd)) else return ()
+            if (iBytes_read) < 0 then (throw $ PosixException (printf "Could not read file with FD %d. Are you sure you have the permission?" fd)) else return ()
             bytestring <- BS.packCStringLen (buffer, iBytes_read) :: IO BS.ByteString
             return bytestring
     bytestring <- withCStringLen (replicate (fromIntegral count) '\0') pread'
