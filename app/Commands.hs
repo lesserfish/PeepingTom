@@ -14,10 +14,11 @@ import Commands.Reset
 import Commands.Save
 import Commands.Selection
 import Commands.Set
+import Commands.StrSet
 import Commands.Update
 
 import Control.Exception
 import State
 import Text.Read
 
-commands = [cmdCommand, newCommand, pidCommand, helpCommand, listCommand, updateCommand, intSetCommand, loadCommand, saveCommand, setCommand, resetCommand]
+commands = [cmdCommand, newCommand, pidCommand, helpCommand, listCommand, updateCommand, intSetCommand, loadCommand, saveCommand, setCommand, resetCommand, strSetCommand]

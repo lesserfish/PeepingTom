@@ -145,9 +145,14 @@ regionScanHelper rinterface fltr regid (start_address, end_address) scopt = do
             let offset = [0 .. offset_size]
             tail <- regionScanHelper rinterface fltr regid (start_address + offset_size + 1, end_address) scopt
             chunk <- rinterface start_address read_size
-            let candidates = mapMaybe (filterAddress fltr regid chunk) offset
-            evaluate candidates
-            return $ candidates ++ tail
+            if IO.mcOk chunk
+                then do
+                    let candidates = mapMaybe (filterAddress fltr regid chunk) offset
+                    evaluate candidates
+                    return $ candidates ++ tail
+                else do
+                    putStrLn $ printf "Failed to load chunk (%8x, %8x) of region %d" start_address (start_address + chunk_size) regid
+                    return tail
 
 regionScan :: IO.RInterface -> Filters.FilterInfo -> Maps.Region -> ScanOptions -> IO [Candidate]
 regionScan rinterface fltr region scopt = do

@@ -72,9 +72,13 @@ compareBS fltr bs = if fltr bs then [byteType] else []
     byteType = Bytes (BS.length bs)
 
 eqStr' :: String -> Filter
-eqStr' str = eqBS' bs
+eqStr' str bs2
+    | eqBSN l bs1 bs2 = [byteType]
+    | otherwise = []
   where
-    !bs = BSC.pack str
+    !bs1 = BSC.pack str
+    !l = length str
+    !byteType = Bytes (length str)
 
 eqStr :: String -> FilterInfo
 eqStr bs = (eqStr' bs, length bs)
