@@ -8,6 +8,10 @@ module PeepingTom.Filters (
     eqInt',
     eqIntX,
     compareInt,
+    i8Eq,
+    i16Eq,
+    i32Eq,
+    i64Eq,
 ) where
 
 import qualified Data.ByteString as BS
@@ -82,36 +86,68 @@ sequenceF (f : rest) bs = if flen == 0 then [] else (f bs) ++ sequenceF rest bs
   where
     flen = length $ f bs
 
-i8Eq :: BS.ByteString -> Filter
-i8Eq !ibs bs
+i8Eq' :: BS.ByteString -> Filter
+i8Eq' !ibs bs
     | BS.length bs < 1 = []
     | otherwise = if (eqBSN 1 ibs bs) then [Int8] else []
 
-i16Eq :: BS.ByteString -> Filter
-i16Eq !ibs bs
+fi8Eq :: I.Int8 -> Filter
+fi8Eq value = i8Eq' bs
+  where
+    !bs = i8ToBS value
+
+i8Eq :: I.Int8 -> FilterInfo
+i8Eq x = (fi8Eq x, 1)
+
+i16Eq' :: BS.ByteString -> Filter
+i16Eq' !ibs bs
     | BS.length bs < 2 = []
     | otherwise = if (eqBSN 2 ibs bs) then [Int16] else []
 
-i32Eq :: BS.ByteString -> Filter
-i32Eq !ibs bs
+fi16Eq :: I.Int16 -> Filter
+fi16Eq value = i16Eq' bs
+  where
+    !bs = i16ToBS value
+
+i16Eq :: I.Int16 -> FilterInfo
+i16Eq x = (fi16Eq x, 2)
+
+i32Eq' :: BS.ByteString -> Filter
+i32Eq' !ibs bs
     | BS.length bs < 4 = []
     | otherwise = if (eqBSN 4 ibs bs) then [Int32] else []
 
-i64Eq :: BS.ByteString -> Filter
-i64Eq !ibs bs
+fi32Eq :: I.Int32 -> Filter
+fi32Eq value = i32Eq' bs
+  where
+    !bs = i32ToBS value
+
+i32Eq :: I.Int32 -> FilterInfo
+i32Eq x = (fi32Eq x, 4)
+
+i64Eq' :: BS.ByteString -> Filter
+i64Eq' !ibs bs
     | BS.length bs < 8 = []
     | otherwise = if (eqBSN 8 ibs bs) then [Int64] else []
 
-feqInt :: Integer -> Filter
-feqInt value = sequenceF [i8Eq i8, i16Eq i16, i32Eq i32, i64Eq i64]
+fi64Eq :: I.Int64 -> Filter
+fi64Eq value = i64Eq' bs
+  where
+    !bs = i64ToBS value
+
+i64Eq :: I.Int64 -> FilterInfo
+i64Eq x = (fi64Eq x, 8)
+
+feqInt' :: Integer -> Filter
+feqInt' value = sequenceF [i8Eq' i8, i16Eq' i16, i32Eq' i32, i64Eq' i64]
   where
     !i8 = i8ToBS (fromInteger value)
     !i16 = i16ToBS (fromInteger value)
     !i32 = i32ToBS (fromInteger value)
     !i64 = i64ToBS (fromInteger value)
 
-eqInt :: Integer -> FilterInfo
-eqInt x = (feqInt x, 8)
+eqInt' :: Integer -> FilterInfo
+eqInt' x = (feqInt x, 8)
 
 feqIntX :: (Bool, Bool, Bool, Bool) -> Integer -> Filter
 feqIntX (i8check, i16check, i32check, i64check) value = sequenceF (i8f ++ i16f ++ i32f ++ i64f)
@@ -120,10 +156,10 @@ feqIntX (i8check, i16check, i32check, i64check) value = sequenceF (i8f ++ i16f +
     !i16 = i16ToBS (fromInteger value)
     !i32 = i32ToBS (fromInteger value)
     !i64 = i64ToBS (fromInteger value)
-    !i8f = if i8check then [i8Eq i8] else []
-    !i16f = if i16check then [i16Eq i16] else []
-    !i32f = if i32check then [i32Eq i32] else []
-    !i64f = if i64check then [i64Eq i64] else []
+    !i8f = if i8check && i8Range value then [i8Eq' i8] else []
+    !i16f = if i16check && i16Range value then [i16Eq' i16] else []
+    !i32f = if i32check && i32Range value then [i32Eq' i32] else []
+    !i64f = if i64check && i64Range value then [i64Eq' i64] else []
 
 eqIntX :: (Bool, Bool, Bool, Bool) -> Integer -> FilterInfo
 eqIntX b v = (feqIntX b v, s)
@@ -131,16 +167,28 @@ eqIntX b v = (feqIntX b v, s)
     (b1, b2, b3, b4) = b
     s = if b4 then 8 else if b3 then 4 else if b2 then 2 else if b1 then 1 else 0
 
-feqInt' :: Integer -> Filter
-feqInt' x
-    | x >= fromIntegral (minBound :: I.Int8) && x <= fromIntegral (maxBound :: I.Int8) = feqIntX (True, True, True, True) x
-    | x >= fromIntegral (minBound :: I.Int16) && x <= fromIntegral (maxBound :: I.Int16) = feqIntX (False, True, True, True) x
-    | x >= fromIntegral (minBound :: I.Int32) && x <= fromIntegral (maxBound :: I.Int32) = feqIntX (False, False, True, True) x
-    | x >= fromIntegral (minBound :: I.Int64) && x <= fromIntegral (maxBound :: I.Int64) = feqIntX (False, False, False, True) x
+i8Range :: Integer -> Bool
+i8Range x = x >= fromIntegral (minBound :: I.Int8) && x <= fromIntegral (maxBound :: I.Int8)
+
+i16Range :: Integer -> Bool
+i16Range x = x >= fromIntegral (minBound :: I.Int16) && x <= fromIntegral (maxBound :: I.Int16)
+
+i32Range :: Integer -> Bool
+i32Range x = x >= fromIntegral (minBound :: I.Int32) && x <= fromIntegral (maxBound :: I.Int32)
+
+i64Range :: Integer -> Bool
+i64Range x = x >= fromIntegral (minBound :: I.Int64) && x <= fromIntegral (maxBound :: I.Int64)
+
+feqInt :: Integer -> Filter
+feqInt x
+    | i8Range x = feqIntX (True, True, True, True) x
+    | i16Range x = feqIntX (False, True, True, True) x
+    | i32Range x = feqIntX (False, False, True, True) x
+    | i64Range x = feqIntX (False, False, False, True) x
     | otherwise = \_ -> []
 
-eqInt' :: Integer -> FilterInfo
-eqInt' x = (feqInt' x, 8)
+eqInt :: Integer -> FilterInfo
+eqInt x = (feqInt' x, 8)
 
 fcompareInt :: (Integer -> Bool) -> Filter
 fcompareInt cmp bs = i8 ++ i16 ++ i32 ++ i64
