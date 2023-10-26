@@ -18,9 +18,12 @@ module PeepingTom.State (
 import Control.Exception
 import Control.Monad (forM)
 import qualified Data.ByteString as BS
+import qualified Data.Foldable as F (toList)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.List (intersperse, reverse)
 import Data.List.Split (chunk)
 import Data.Maybe (Maybe, catMaybes, mapMaybe)
+import Data.Sequence (Seq, empty, (|>))
 import Debug.Trace
 import qualified PeepingTom.Conversions as Conversions
 import qualified PeepingTom.Filters as Filters
@@ -115,67 +118,87 @@ isInChunk candidate chunk = (candidate_addr >= chunk_addr) && (candidate_addr + 
     chunk_addr = IO.mcStartAddr chunk
     chunk_size = IO.mcSize chunk
 
-filterAddress :: Filters.FilterInfo -> Int -> IO.MemoryChunk -> Address -> Maybe Candidate
-filterAddress (fltr, _) regid chunk offset = output
-  where
-    address = (IO.mcStartAddr chunk) + offset
-    bytes = BS.drop offset (IO.mcData chunk) -- Get all the bytes starting from offset
-    candidate_types = fltr bytes :: [Type]
-    max_size = maxSizeOf candidate_types
-    byte_data = BS.take max_size bytes -- Store this amount of bytes
-    region_id = regid
-    new_candidate =
-        Candidate
-            { cAddress = address
-            , cData = byte_data
-            , cTypes = candidate_types
-            , cRegionID = region_id
-            }
-    output = if length candidate_types == 0 then Nothing else Just new_candidate
+type MSeq a = IORef (Seq a)
 
-regionScanHelper :: IO.RInterface -> Filters.FilterInfo -> Size -> (Address, Address) -> ScanOptions -> IO [Candidate]
-regionScanHelper rinterface fltr regid (start_address, end_address) scopt = do
+makeMSeq :: IO (MSeq a)
+makeMSeq = newIORef empty
+
+push :: MSeq a -> a -> IO ()
+push seqRef element = do
+    mseq <- readIORef seqRef
+    writeIORef seqRef (mseq |> element)
+
+toList :: MSeq a -> IO [a]
+toList seqRef = do
+    mseq <- readIORef seqRef
+    return $ F.toList mseq
+
+filterAddress :: MSeq Candidate -> Filters.FilterInfo -> Int -> IO.MemoryChunk -> Address -> IO ()
+filterAddress seqref (fltr, _) regid chunk offset = do
+    let bytes = BS.drop offset (IO.mcData chunk) -- Get all the bytes starting from offset
+    let candidate_types = fltr bytes :: [Type]
+    if length candidate_types == 0
+        then return ()
+        else do
+            let address = (IO.mcStartAddr chunk) + offset
+            let max_size = maxSizeOf candidate_types
+            let byte_data = BS.take max_size bytes -- Store this amount of bytes
+            let new_candidate =
+                    Candidate
+                        { cAddress = address
+                        , cData = byte_data
+                        , cTypes = candidate_types
+                        , cRegionID = regid
+                        }
+            evaluate new_candidate
+            push seqref new_candidate
+
+regionScanHelper :: MSeq Candidate -> IO.RInterface -> Filters.FilterInfo -> Size -> (Address, Address) -> ScanOptions -> IO ()
+regionScanHelper seqref rinterface fltr regid (start_address, end_address) scopt = do
     if start_address >= end_address
-        then return []
+        then return ()
         else do
             let chunk_size = soChunkSize scopt
             let (_, max_size) = fltr
             let offset_size = min (end_address - start_address) chunk_size
             let read_size = min (end_address - start_address) (chunk_size + max_size)
             let offset = [0 .. offset_size]
-            tail <- regionScanHelper rinterface fltr regid (start_address + offset_size + 1, end_address) scopt
+            tail <- regionScanHelper seqref rinterface fltr regid (start_address + offset_size + 1, end_address) scopt
             chunk <- rinterface start_address read_size
-            let candidates = mapMaybe (filterAddress fltr regid chunk) offset
-            evaluate candidates
-            return $ candidates ++ tail
+            mapM_ (filterAddress seqref fltr regid chunk) offset
 
-regionScan :: IO.RInterface -> Filters.FilterInfo -> Maps.Region -> ScanOptions -> IO [Candidate]
-regionScan rinterface fltr region scopt = do
+regionScan :: MSeq Candidate -> IO.RInterface -> Filters.FilterInfo -> Maps.Region -> ScanOptions -> IO ()
+regionScan seqref rinterface fltr region scopt = do
     let rid = Maps.rID region
     let sa = Maps.rStartAddr region
     let ea = Maps.rEndAddr region
-    candidates <- regionScanHelper rinterface fltr rid (sa, ea) scopt
-    return candidates
+    regionScanHelper seqref rinterface fltr rid (sa, ea) scopt
 
-regionScanLog :: Maps.Region -> [Candidate] -> IO ()
-regionScanLog reg result = do
-    if length result == 0 then return () else putStrLn $ printf "Extracted %4d candidates from Region %4d (size = %8x)" (length result) (Maps.rID reg) ((Maps.rEndAddr reg) - (Maps.rStartAddr reg))
+vocal' :: (a -> IO ()) -> (a -> IO b) -> a -> (IO b)
+vocal' log action input = do
+    output <- action input
+    log input
+    return output
+
+regionScanLog :: Maps.Region -> IO ()
+regionScanLog reg = do
+    putStrLn $ printf "Finished extraction of region %d" (Maps.rID reg)
 
 scanMapHelper :: ScanOptions -> Filters.FilterInfo -> Maps.MapInfo -> IO [Candidate]
 scanMapHelper scopt fltr map = do
+    canseq <- makeMSeq :: IO (MSeq Candidate)
     let stopsig = soSIGSTOP scopt
     let pid = Maps.miPID map
     let regions = Maps.miRegions map
-    candidates <-
-        IO.withRInterface
-            pid
-            stopsig
-            ( \rinterface -> do
-                let action = vocal regionScanLog (\x -> regionScan rinterface fltr x scopt) :: Maps.Region -> IO [Candidate]
-                fc <- forM regions action :: IO [[Candidate]]
-                return $ concat fc
-            )
-    return $ candidates
+    IO.withRInterface
+        pid
+        stopsig
+        ( \rinterface -> do
+            let action = vocal' regionScanLog (\x -> regionScan canseq rinterface fltr x scopt)
+            forM regions action
+        )
+    candidates <- toList canseq
+    return candidates
 
 updateCandidatesHelper :: IO.RInterface -> [Candidate] -> IO.MemoryChunk -> IO [Candidate]
 updateCandidatesHelper _ [] _ = return []
