@@ -131,7 +131,7 @@ filterAddress (fltr, _) regid chunk offset = output
             , cTypes = candidate_types
             , cRegionID = region_id
             }
-    output = if length candidate_types == 0 then Nothing else Just new_candidate
+    output = if null candidate_types then Nothing else Just new_candidate
 
 regionScanHelper :: IO.RInterface -> Filters.FilterInfo -> Size -> (Address, Address) -> ScanOptions -> IO [Candidate]
 regionScanHelper rinterface fltr regid (start_address, end_address) scopt = do
