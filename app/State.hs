@@ -7,7 +7,13 @@ import Text.Printf
 
 type PTMap = Map.Map String PT.PeepState
 
-data RFilter = RFDefault deriving (Show)
+data RFilter
+    = RFDefault
+    | RFReadPerm
+    | RFWritePerm
+    | RFAll
+    deriving (Show)
+
 data Options = Options
     { oScanTypes :: [PTType.Type]
     , oRFilter :: RFilter

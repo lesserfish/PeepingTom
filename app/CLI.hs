@@ -30,7 +30,7 @@ run initState = runInputT (mySettings commands) (loop initState)
   where
     loop :: State -> InputT IO ()
     loop state = do
-        minput <- getInputLine (printf "%s > " (getPrefix state))
+        minput <- getInputLine (printf "\n%s > " (getPrefix state))
         case minput of
             Nothing -> return ()
             Just "exit" -> return ()
