@@ -20,7 +20,8 @@ library PeepingTom-lib
                     bytestring >= 0.11.4.0,
                     split >= 0.2.3.5,
                     binary >= 0.8.9.1,
-                    mtl >= 2.3.1
+                    mtl >= 2.3.1,
+                    containers >= 0.6.8
   hs-source-dirs: src
   default-language: Haskell2010
   ghc-options: -O2  
@@ -43,7 +44,28 @@ test-suite PeepingTom-test
 
 executable PeepingTom
   main-is: CLI.hs
-  other-modules: Commands, Autocomplete, State
+  other-modules: Commands, 
+        Autocomplete, 
+        State, 
+        Commands.Base,
+        Commands.Help,
+        Commands.IntSet,
+        Commands.List,
+        Commands.Load,
+        Commands.New,
+        Commands.PID,
+        Commands.Reset,
+        Commands.Save,
+        Commands.Selection,
+        Commands.Selection.Eq,
+        Commands.Selection.Geq,
+        Commands.Selection.Gt,
+        Commands.Selection.Helper,
+        Commands.Selection.Leq,
+        Commands.Selection.Lt,
+        Commands.Selection.Neq,
+        Commands.Set,
+        Commands.Update,
   build-depends: base >= 4.18.0.0, 
                  PeepingTom-lib,
                  haskeline >= 0.8.2.1,
@@ -51,5 +73,4 @@ executable PeepingTom
   hs-source-dirs: app
   default-language: Haskell2010
   ghc-options: -O2 
---prof -fprof-auto -rtsopts
-
+--prof -rtsopts -fprof-late -ddump-stg-final -ddump-to-file
