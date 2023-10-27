@@ -16,7 +16,7 @@ module PeepingTom.State (
     divideTask,
 ) where
 
-import Control.Concurrent.ParallelIO
+import Control.Concurrent.ParallelIO.Local
 import Control.Exception
 import Control.Monad (forM)
 import qualified Data.ByteString as BS
@@ -192,9 +192,14 @@ scanMapHelper :: ScanOptions -> Filters.FilterInfo -> Maps.MapInfo -> IO [Candid
 scanMapHelper scopt fltr mapinfo = do
     let regions = Maps.miRegions mapinfo
     let pid = Maps.miPID mapinfo
-    let region_split = divideTask 18 regions :: [[Maps.Region]]
+    let region_split = divideTask 20 regions :: [[Maps.Region]]
     let actions = map (scanMapHelper' pid scopt fltr) region_split :: [IO [Candidate]]
-    fc <- parallelInterleaved actions
+    fc <-
+        withPool
+            6
+            ( \workers -> do
+                parallel workers actions
+            )
     return $ concat fc
 
 updateCandidatesHelper :: IO.RInterface -> [Candidate] -> IO.MemoryChunk -> IO [Candidate]
