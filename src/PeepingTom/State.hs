@@ -13,6 +13,7 @@ module PeepingTom.State (
     scanMap,
     candidateCount,
     regionCount,
+    divideTask,
 ) where
 
 import Control.Concurrent.ParallelIO
@@ -167,22 +168,34 @@ regionScanLog :: Maps.Region -> [Candidate] -> IO ()
 regionScanLog reg result = do
     if length result == 0 then return () else putStrLn $ printf "Extracted %4d candidates from Region %4d (size = %8x)" (length result) (Maps.rID reg) ((Maps.rEndAddr reg) - (Maps.rStartAddr reg))
 
-scanMapHelper :: ScanOptions -> Filters.FilterInfo -> Maps.MapInfo -> IO [Candidate]
-scanMapHelper scopt fltr map = do
+divideTask :: Int -> [a] -> [[a]]
+divideTask n [] = []
+divideTask n lst = [chunk] ++ (divideTask n rest)
+  where
+    (chunk, rest) = splitAt n lst
+
+scanMapHelper' :: PID -> ScanOptions -> Filters.FilterInfo -> [Maps.Region] -> IO [Candidate]
+scanMapHelper' pid scopt fltr regions = do
     let stopsig = soSIGSTOP scopt
-    let pid = Maps.miPID map
-    let regions = Maps.miRegions map
     candidates <-
         IO.withRInterface
             pid
             stopsig
             ( \rinterface -> do
                 let action = vocal regionScanLog (\x -> regionScan rinterface fltr x scopt) :: Maps.Region -> IO [Candidate]
-                let actions = fmap action regions :: [IO [Candidate]]
-                fc <- parallelInterleaved actions
+                fc <- mapM action regions
                 return $ concat fc
             )
     return $ candidates
+
+scanMapHelper :: ScanOptions -> Filters.FilterInfo -> Maps.MapInfo -> IO [Candidate]
+scanMapHelper scopt fltr mapinfo = do
+    let regions = Maps.miRegions mapinfo
+    let pid = Maps.miPID mapinfo
+    let region_split = divideTask 18 regions :: [[Maps.Region]]
+    let actions = map (scanMapHelper' pid scopt fltr) region_split :: [IO [Candidate]]
+    fc <- parallelInterleaved actions
+    return $ concat fc
 
 updateCandidatesHelper :: IO.RInterface -> [Candidate] -> IO.MemoryChunk -> IO [Candidate]
 updateCandidatesHelper _ [] _ = return []
