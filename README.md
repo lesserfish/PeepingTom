@@ -114,6 +114,7 @@ All scans require a filter, a list of available filters can be seen by using
 For example, in order to extract all memory addresses that contain the integer value 27, you would
 
     > $ == 27
+    > $ == "Continue"
 
 The initial scan can take some time, depending on the quantity of regions of interest.
 
@@ -149,9 +150,13 @@ This will read the virtual memory, and update the values of each candidates. It 
 
 Once you have filtered the virtual memory, and isolated your addresses of interest, you may want to set the addresses to a specific value.
 
-Currently, you can only set the memory value to an integer value. You can do this by running
+You can set the memory value to an integer value using IntSet
 
     > IntSet value
+
+Alternative, you can write a string by using StrSet
+
+    > StrSet "This text will go to the memory"
 
 This will iterate over all of the candidates, and set the memory value to the corresponding value, taking into consideration the length of the memory address, i.e. It will consider whether the address holds an Int8 or an Int32. 
 
@@ -194,11 +199,25 @@ You can set the type of interest by running
 
     > set type int64 int16 int 8
 
-So far, only Int64, Int32, Int16 and Int8 are supported.
+This will affect all numeric scans, but will not affect literal scans, i.e. Scans of strings,
+
+    > $ == "A sequence of bytes"
+
+will still work regardless of what type was set with 'set type'
 
 PeepingTom scans the regions of virtual memory by reading chunks of memory, and then filtering the addresses in each chunk before loading the next chunk. You can set the size of chunks being loaded by running
 
     > set chunk_size 1000
+
+The initial scan will filter out any region of memory that does not satisfy the following:
+
+1. The size greater than 0
+2. Has Read/Write Address
+3. Is not a mapping to a file, with exception of the main executable
+
+This is the default region filter, which matches the default filter of ScanMem. There are alternative filters. You can set it by running
+
+    > set rfilter [Filter]
 
 You can also print the current options by running
 
@@ -246,11 +265,12 @@ The default filter matches the default filter of scanmem.
 
 ### Initial scan:
 
-We are interested in extracting the addresses in virtual memory that satisfy a specific filter.
+We are interested in extracting the addresses in virtual memory that satisfy a specific filter. For this, you need to create a FilterInfo
 
-The filters need to be of type: 
+These are defined as
     
     type Filter = BS.ByteString -> [Type]
+    type FilterInfo = (Filter, Int)
 
 where Type is a custom data type defined in PeepingTom.Type. It is defined as:
 
@@ -268,6 +288,8 @@ where Type is a custom data type defined in PeepingTom.Type. It is defined as:
         | Dbl
         | Bytes Int
         deriving (Show)
+
+The Int that accompanies FilterInfo is the largest size of possible accepting types. For example: If a Filter can return Int8, Int16, or Int32, then the int needs to be equal to 4 = sizeof(Int32).
 
 So far, there are only filters for Integer comparison / equality.
 
@@ -288,9 +310,14 @@ If you are interested in searching for a specific data type you can use
 
 With this filter you can specify which widths of signed integer you are interested in.
 
+Alternatively, you may be interested in searching for a sequence of bytes, or a string. You can do this by creating the filters
+
+    eqBS :: ByteString -> FilterInfo
+    eqStr :: String -> FilterInfo
+
 Once you have a filter, you can perform an initial scan by running scanMap
 
-    scanMap :: Filters.Filter -> Maps.MapInfo -> IO PeepState
+    scanMap :: Filters.FilterInfo -> Maps.MapInfo -> IO PeepState
 
 To use scanMap, you need to specify a filter and the map info obtained by 'getMapInfo'.
 

@@ -59,12 +59,14 @@ bsToString bs = concat $ intersperse " " (fmap (printf "0x%02X") (BS.unpack bs))
 
 -- ByteString
 eqBS' :: BS.ByteString -> Filter
-eqBS' bs1 bs2 = if bs1 == bs2 then [byteType] else []
+eqBS' !bs1 bs2 = if (eqBSN (BS.length bs1) bs1 bs2) then [byteType] else []
   where
     byteType = Bytes (BS.length bs1)
 
 eqBS :: BS.ByteString -> FilterInfo
-eqBS bs1 = (eqBS' bs1, BS.length bs1)
+eqBS bs = (eqBS' bs, s)
+  where
+    s = BS.length bs
 
 compareBS :: (BS.ByteString -> Bool) -> Filter
 compareBS fltr bs = if fltr bs then [byteType] else []
