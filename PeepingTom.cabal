@@ -41,6 +41,20 @@ test-suite PeepingTom-test
     extra-include-dirs: test/scanmem/
     extra-lib-dirs: test/scanmem/build/.libs/
     extra-libraries: scanmem
+executable PeepingTom-speedtest
+    import:           warnings
+    default-language: Haskell2010
+    -- other-modules:
+    -- other-extensions:
+    hs-source-dirs:   speedtest
+    main-is:          Main.hs
+    build-depends:
+        base >= 4.18.0.0,
+        PeepingTom-lib
+    extra-include-dirs: speedtest/scanmem/
+    extra-lib-dirs: speedtest/scanmem/build/.libs/
+    extra-libraries: scanmem
+
 
 executable PeepingTom
   main-is: CLI.hs
