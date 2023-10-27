@@ -15,6 +15,7 @@ module PeepingTom.State (
     regionCount,
 ) where
 
+import Control.Concurrent.ParallelIO
 import Control.Exception
 import Control.Monad (forM)
 import qualified Data.ByteString as BS
@@ -177,7 +178,8 @@ scanMapHelper scopt fltr map = do
             stopsig
             ( \rinterface -> do
                 let action = vocal regionScanLog (\x -> regionScan rinterface fltr x scopt) :: Maps.Region -> IO [Candidate]
-                fc <- forM regions action :: IO [[Candidate]]
+                let actions = fmap action regions :: [IO [Candidate]]
+                fc <- parallelInterleaved actions
                 return $ concat fc
             )
     return $ candidates
