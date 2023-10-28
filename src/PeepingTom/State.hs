@@ -96,11 +96,11 @@ maxType (t : rest)
     | sizeOf t < sizeOf (maxType rest) = (maxType rest)
     | otherwise = t
 
-candidateFilter :: Filters.Filter -> Candidate -> Maybe Candidate
-candidateFilter fltr candidate = output
+candidateFilter :: Filters.FilterInfo -> Candidate -> Maybe Candidate
+candidateFilter (fltr, _) candidate = output
   where
     bsData = cData $ candidate :: BS.ByteString
-    valid_types = filter (fltr bsData) (cTypes candidate) :: [Type]
+    valid_types = fltr bsData :: [Type]
     output = if length valid_types == 0 then Nothing else candidate'
     max_size = maxSizeOf valid_types
     bsData' = BS.take max_size bsData -- Only store that amount of bytes
@@ -115,12 +115,12 @@ isInChunk candidate chunk = (candidate_addr >= chunk_addr) && (candidate_addr + 
     chunk_addr = IO.mcStartAddr chunk
     chunk_size = IO.mcSize chunk
 
-filterAddress :: [Type] -> Filters.Filter -> Int -> IO.MemoryChunk -> Address -> Maybe Candidate
-filterAddress types fltr regid chunk offset = output
+filterAddress :: Filters.FilterInfo -> Int -> IO.MemoryChunk -> Address -> Maybe Candidate
+filterAddress (fltr, _) regid chunk offset = output
   where
     address = (IO.mcStartAddr chunk) + offset
     bytes = BS.drop offset (IO.mcData chunk) -- Get all the bytes starting from offset
-    candidate_types = filter (fltr bytes) types :: [Type]
+    candidate_types = fltr bytes :: [Type]
     max_size = maxSizeOf candidate_types
     byte_data = BS.take max_size bytes -- Store this amount of bytes
     region_id = regid
@@ -131,38 +131,43 @@ filterAddress types fltr regid chunk offset = output
             , cTypes = candidate_types
             , cRegionID = region_id
             }
-    output = if length candidate_types == 0 then Nothing else Just new_candidate
+    output = if null candidate_types then Nothing else Just new_candidate
 
-regionScanHelper :: IO.RInterface -> [Type] -> Filters.Filter -> Size -> (Address, Address) -> ScanOptions -> IO [Candidate]
-regionScanHelper rinterface types fltr regid (start_address, end_address) scopt = do
+regionScanHelper :: IO.RInterface -> Filters.FilterInfo -> Size -> (Address, Address) -> ScanOptions -> IO [Candidate]
+regionScanHelper rinterface fltr regid (start_address, end_address) scopt = do
     if start_address >= end_address
         then return []
         else do
             let chunk_size = soChunkSize scopt
-            let max_size = maxSizeOf types
+            let (_, max_size) = fltr
             let offset_size = min (end_address - start_address) chunk_size
             let read_size = min (end_address - start_address) (chunk_size + max_size)
             let offset = [0 .. offset_size]
-            tail <- regionScanHelper rinterface types fltr regid (start_address + offset_size + 1, end_address) scopt
+            tail <- regionScanHelper rinterface fltr regid (start_address + offset_size + 1, end_address) scopt
             chunk <- rinterface start_address read_size
-            let candidates = mapMaybe (filterAddress types fltr regid chunk) offset
-            evaluate candidates
-            return $ candidates ++ tail
+            if IO.mcOk chunk
+                then do
+                    let candidates = mapMaybe (filterAddress fltr regid chunk) offset
+                    evaluate candidates
+                    return $ candidates ++ tail
+                else do
+                    putStrLn $ printf "Failed to load chunk (%8x, %8x) of region %d" start_address (start_address + chunk_size) regid
+                    return tail
 
-regionScan :: IO.RInterface -> [Type] -> Filters.Filter -> Maps.Region -> ScanOptions -> IO [Candidate]
-regionScan rinterface types fltr region scopt = do
+regionScan :: IO.RInterface -> Filters.FilterInfo -> Maps.Region -> ScanOptions -> IO [Candidate]
+regionScan rinterface fltr region scopt = do
     let rid = Maps.rID region
     let sa = Maps.rStartAddr region
     let ea = Maps.rEndAddr region
-    candidates <- regionScanHelper rinterface types fltr rid (sa, ea) scopt
+    candidates <- regionScanHelper rinterface fltr rid (sa, ea) scopt
     return candidates
 
 regionScanLog :: Maps.Region -> [Candidate] -> IO ()
 regionScanLog reg result = do
     if length result == 0 then return () else putStrLn $ printf "Extracted %4d candidates from Region %4d (size = %8x)" (length result) (Maps.rID reg) ((Maps.rEndAddr reg) - (Maps.rStartAddr reg))
 
-scanMapHelper :: ScanOptions -> [Type] -> Filters.Filter -> Maps.MapInfo -> IO [Candidate]
-scanMapHelper scopt types fltr map = do
+scanMapHelper :: ScanOptions -> Filters.FilterInfo -> Maps.MapInfo -> IO [Candidate]
+scanMapHelper scopt fltr map = do
     let stopsig = soSIGSTOP scopt
     let pid = Maps.miPID map
     let regions = Maps.miRegions map
@@ -171,7 +176,7 @@ scanMapHelper scopt types fltr map = do
             pid
             stopsig
             ( \rinterface -> do
-                let action = vocal regionScanLog (\x -> regionScan rinterface types fltr x scopt) :: Maps.Region -> IO [Candidate]
+                let action = vocal regionScanLog (\x -> regionScan rinterface fltr x scopt) :: Maps.Region -> IO [Candidate]
                 fc <- forM regions action :: IO [[Candidate]]
                 return $ concat fc
             )
@@ -240,7 +245,7 @@ showState maxcandidates' maxregions' ps =
     rstr = concat $ intersperse "\n" rstrlist
     rdot = if (length . Maps.miRegions $ region_list) > maxregions then "...\n" else ""
 
-applyFilter :: Filters.Filter -> PeepState -> PeepState
+applyFilter :: Filters.FilterInfo -> PeepState -> PeepState
 applyFilter fltr state = output
   where
     candidates' = mapMaybe (candidateFilter fltr) (psCandidates state)
@@ -270,13 +275,13 @@ applyWriterS scopt writer peepstate = do
 applyWriter :: Writer.Writer -> PeepState -> IO PeepState
 applyWriter = applyWriterS defaultScanOptions
 
-scanMapS :: ScanOptions -> [Type] -> Filters.Filter -> Maps.MapInfo -> IO PeepState
-scanMapS scopt types fltr map = do
+scanMapS :: ScanOptions -> Filters.FilterInfo -> Maps.MapInfo -> IO PeepState
+scanMapS scopt fltr map = do
     let pid = (Maps.miPID map)
-    candidates <- scanMapHelper scopt types fltr map
+    candidates <- scanMapHelper scopt fltr map
     return PeepState{psPID = pid, psCandidates = candidates, psRegions = map}
 
-scanMap :: [Type] -> Filters.Filter -> Maps.MapInfo -> IO PeepState
+scanMap :: Filters.FilterInfo -> Maps.MapInfo -> IO PeepState
 scanMap = scanMapS defaultScanOptions
 
 candidateCount :: PeepState -> Int

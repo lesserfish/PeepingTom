@@ -81,7 +81,7 @@ pwrite fd raw_data offset = do
 foreign import capi safe "unistd.h pread"
     raw_pread :: CInt -> Ptr a -> CSize -> CSize -> IO CSize
 
-pread :: FD -> Size -> Address -> IO BS.ByteString
+pread :: FD -> Size -> Address -> IO (BS.ByteString, Int)
 pread fd count offset = do
     let pread' (buffer, iBufsize) = do
             let csBufsize = fromIntegral iBufsize :: CSize
@@ -89,12 +89,14 @@ pread fd count offset = do
             let csOffset = fromIntegral offset :: CSize
             ciBytes_read <- raw_pread ciFD buffer csBufsize csOffset
             let iBytes_read = fromIntegral ciBytes_read :: Int
-            if (iBytes_read) < 0 then (throw $ PosixException (printf "Could not read file with PID %d. Are you sure you have the permission?" fd)) else return ()
-            bytestring <- BS.packCStringLen (buffer, iBytes_read) :: IO BS.ByteString
-            return bytestring
-    bytestring <- withCStringLen (replicate (fromIntegral count) '\0') pread'
-    evaluate bytestring
-    return bytestring
+            if (iBytes_read) < 0
+                then return $ (BS.empty, iBytes_read)
+                else do
+                    bytestring <- BS.packCStringLen (buffer, iBytes_read) :: IO BS.ByteString
+                    return $ (bytestring, iBytes_read)
+    output <- withCStringLen (replicate (fromIntegral count) '\0') pread'
+    evaluate output
+    return output
 
 -- MAX_PATH
 foreign import capi safe "helper.h get_path_max"

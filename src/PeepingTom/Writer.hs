@@ -1,9 +1,14 @@
 module PeepingTom.Writer (
     Writer,
     writeInt,
+    writeBytes,
+    writeBytes_,
+    writeStr,
+    writeStr_,
 ) where
 
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BSC
 import qualified PeepingTom.Conversions as Conversions
 import PeepingTom.Filters
 import PeepingTom.Type
@@ -20,3 +25,19 @@ writeInt i UInt16 = Conversions.u16ToBS (fromIntegral i)
 writeInt i UInt32 = Conversions.u32ToBS (fromIntegral i)
 writeInt i UInt64 = Conversions.u64ToBS (fromIntegral i)
 writeInt _ _ = BS.empty
+
+writeBytes :: BS.ByteString -> Writer
+writeBytes bs (Bytes n)
+    | BS.length bs == n = bs
+    | otherwise = BS.empty
+writeBytes _ _ = BS.empty
+
+writeBytes_ :: BS.ByteString -> Writer
+writeBytes_ bs (Bytes n) = bs
+writeBytes_ _ _ = BS.empty
+
+writeStr :: String -> Writer
+writeStr str = writeBytes (BSC.pack str)
+
+writeStr_ :: String -> Writer
+writeStr_ str = writeBytes_ (BSC.pack str)

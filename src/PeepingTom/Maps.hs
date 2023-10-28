@@ -11,6 +11,9 @@ module PeepingTom.Maps (
     getMapInfo,
     filterMap,
     filterRW,
+    filterR,
+    filterW,
+    filterAll,
     filterMappings,
     defaultFilter,
     totalBytes,
@@ -213,6 +216,22 @@ filterRW region = readP && writeP
     writeP = case (w (rPermission region)) of
         W -> True
         NW -> False
+
+filterR :: Region -> Bool
+filterR region = readP
+  where
+    readP = case (r (rPermission region)) of
+        R -> True
+        NR -> False
+
+filterW :: Region -> Bool
+filterW region = writeP
+  where
+    writeP = case (w (rPermission region)) of
+        W -> True
+        NW -> False
+filterAll :: Region -> Bool
+filterAll _ = True
 
 filterMappings :: String -> Region -> Bool
 filterMappings execname region = not_mapping || not_exec

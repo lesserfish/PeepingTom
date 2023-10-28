@@ -17,6 +17,7 @@ jobs:
           cabal-version: '3.10.1.0' # Exact version of Cabal
       - name: Clone ScanMem
         run: git clone https://github.com/scanmem/scanmem.git test/scanmem
+
       - name: Install requirements
         run: sudo apt install autotools-dev libtool libreadline-dev intltool python3
       - name: Build ScanMem

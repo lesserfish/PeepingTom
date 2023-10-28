@@ -12,7 +12,7 @@ import qualified PeepingTom.Maps as Maps
 import qualified PeepingTom.Posix as Posix
 import Text.Printf (printf)
 
-data MemoryChunk = MemoryChunk {mcStartAddr :: Address, mcSize :: Size, mcData :: BS.ByteString}
+data MemoryChunk = MemoryChunk {mcOk :: Bool, mcStartAddr :: Address, mcSize :: Size, mcData :: BS.ByteString}
 type WInterface = (Address -> BS.ByteString -> IO ())
 type RInterface = Address -> Size -> IO MemoryChunk
 
@@ -48,15 +48,18 @@ dettach (pid, fd) contsig = do
 
 loadMemoryChunk :: FD -> Address -> Size -> IO MemoryChunk
 loadMemoryChunk fd addr chunk_size = do
-    chunk <- Posix.pread fd chunk_size addr
-    return $ MemoryChunk addr chunk_size chunk
+    (chunk, bytes_read) <- Posix.pread fd chunk_size addr
+    return $ MemoryChunk{mcOk = (bytes_read >= 0), mcData = chunk, mcSize = chunk_size, mcStartAddr = addr}
 
 -- Read / Write
 
 writeInterface :: FD -> WInterface
 writeInterface fd addr bs = do
-    _ <- Posix.pwrite fd bs addr -- TODO: Handle errors in here maybe?
-    return ()
+    if BS.length bs > 0
+        then do
+            _ <- Posix.pwrite fd bs addr -- TODO: Handle errors in here maybe?
+            return ()
+        else return ()
 
 withWInterface :: PID -> Bool -> (WInterface -> IO a) -> IO a
 withWInterface pid stopsig action = do
