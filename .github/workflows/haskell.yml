@@ -26,6 +26,14 @@ jobs:
           mkdir -p build && cd build
           ../configure
           make
+      - name: Build ScanMem2
+        run: |
+          cd speedtest/scanmem/
+          ./autogen.sh
+          mkdir -p build && cd build
+          ../configure
+          make
+
       - name: Build PeepingTom
         run: cabal build
       - name: Run Tests
