@@ -5,6 +5,7 @@ module Main where
 
 import Foreign.C
 import qualified PeepingTom.Conversions as Conversions
+import qualified PeepingTom.Experimental.Fast.State as Fast
 import qualified PeepingTom.Filters as Filters
 import qualified PeepingTom.Maps as Maps
 import qualified PeepingTom.State as State
@@ -62,13 +63,24 @@ run_peeptom pid value = do
     state <- State.scanMap fltr maps
     return ()
 
+run_peeptom_fast :: Int -> Integer -> IO ()
+run_peeptom_fast pid value = do
+    all_maps <- Maps.getMapInfo pid
+    let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
+    let fltr = Filters.eqInt value
+    state <- Fast.scanMap (Fast.CFilter [Type.Int32]) maps
+    return ()
+
 main :: IO ()
 main = do
     withProcess
         ( \pid -> do
-            scanmem <- time $ run_scanmem pid 1234
-            peeptom <- time $ run_peeptom pid 1234
+            scanmem <- time $ run_scanmem pid 42
+            peeptom <- time $ run_peeptom pid 42
+            peeptom_fast <- time $ run_peeptom_fast pid 42
             putStrLn $ printf "\n\nScanMem: %f" scanmem
-            putStrLn $ printf "\nPeepingTom: %f" peeptom
-            putStrLn $ printf "\n\nDifference: %f" (peeptom / scanmem)
+            putStrLn $ printf "PeepingTom: %f" peeptom
+            putStrLn $ printf "PeepingTom Fast: %f" peeptom_fast
+            putStrLn $ printf "\nDifference: %f" (peeptom / scanmem)
+            putStrLn $ printf "Difference Fast: %f" (peeptom_fast / scanmem)
         )
