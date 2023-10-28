@@ -15,7 +15,17 @@ common warnings
   -Wall
 
 library PeepingTom-lib
-  exposed-modules: PeepingTom.Maps, PeepingTom.Posix, PeepingTom.Type, PeepingTom.State, PeepingTom.IO, PeepingTom.Filters, PeepingTom.Internal, PeepingTom.Conversions, PeepingTom.Writer, PeepingTom.Experimental.PT, PeepingTom.Experimental.Fast.State
+  exposed-modules:  PeepingTom.Maps, 
+                    PeepingTom.Posix, 
+                    PeepingTom.Type, 
+                    PeepingTom.State, 
+                    PeepingTom.IO, 
+                    PeepingTom.Filters, 
+                    PeepingTom.Internal, 
+                    PeepingTom.Conversions, 
+                    PeepingTom.Writer, 
+                    PeepingTom.Experimental.PT, 
+                    PeepingTom.Experimental.Fast.State,
   build-depends:    base >= 4.18.0.0,
                     bytestring >= 0.11.4.0,
                     split >= 0.2.3.5,
@@ -89,5 +99,4 @@ executable PeepingTom
                  containers >= 0.6.7
   hs-source-dirs: app
   default-language: Haskell2010
-  ghc-options: -O2 -threaded
---prof -rtsopts -fprof-late -ddump-stg-final -ddump-to-file
+  ghc-options: -O2 -prof -rtsopts -fprof-auto 
