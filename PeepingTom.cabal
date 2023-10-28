@@ -21,7 +21,8 @@ library PeepingTom-lib
                     split >= 0.2.3.5,
                     binary >= 0.8.9.1,
                     mtl >= 2.3.1,
-                    containers >= 0.6.8
+                    containers >= 0.6.8,
+                    async >= 2.2.4
   hs-source-dirs: src
   default-language: Haskell2010
   ghc-options: -O2  
@@ -51,8 +52,8 @@ executable PeepingTom-speedtest
     build-depends:
         base >= 4.18.0.0,
         PeepingTom-lib
-    extra-include-dirs: speedtest/scanmem/
-    extra-lib-dirs: speedtest/scanmem/build/.libs/
+    extra-include-dirs: test/scanmem/
+    extra-lib-dirs: test/scanmem/build/.libs/
     extra-libraries: scanmem
 
 
@@ -87,5 +88,5 @@ executable PeepingTom
                  containers >= 0.6.7
   hs-source-dirs: app
   default-language: Haskell2010
-  ghc-options: -O2 
+  ghc-options: -O2 -threaded
 --prof -rtsopts -fprof-late -ddump-stg-final -ddump-to-file

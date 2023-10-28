@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <signal.h>
-#include "./scanmem/scanmem.h"
+#include "../test/scanmem/scanmem.h"
 
 void child_loop()
 {
