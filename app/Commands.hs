@@ -4,6 +4,7 @@ module Commands (
 ) where
 
 import Commands.Base
+import qualified Commands.Demo as Demo
 import Commands.Help
 import Commands.IntSet
 import Commands.List
@@ -21,4 +22,4 @@ import Control.Exception
 import State
 import Text.Read
 
-commands = [cmdCommand, newCommand, pidCommand, helpCommand, listCommand, updateCommand, intSetCommand, loadCommand, saveCommand, setCommand, resetCommand, strSetCommand]
+commands = [cmdCommand, newCommand, pidCommand, helpCommand, listCommand, updateCommand, intSetCommand, loadCommand, saveCommand, setCommand, resetCommand, strSetCommand, Demo.eqCommand]
