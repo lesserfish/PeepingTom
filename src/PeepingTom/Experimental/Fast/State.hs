@@ -4,101 +4,130 @@
 module PeepingTom.Experimental.Fast.State where
 
 import Control.Monad (forM)
+import Data.Bits
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BSI
-import qualified Data.Foldable as F
-import Data.IORef
-import Data.Sequence (Seq, empty, (|>))
 import Foreign.C
+import Foreign.C.Types
 import Foreign.Ptr
 import Foreign.StablePtr
 import GHC.ForeignPtr
+import PeepingTom.Experimental.Fast.Filters
+import PeepingTom.Experimental.Fast.MSeq
 import qualified PeepingTom.IO as IO
 import PeepingTom.Internal
 import qualified PeepingTom.Maps as Maps
-import qualified PeepingTom.State as Default
+import qualified PeepingTom.State as PT
 import qualified PeepingTom.Type as T
 import Text.Printf
 
-type MSeq a = IORef (Seq a)
+foreign import capi safe "C/ChunkReader.c scan"
+    c_scan ::
+        FunPtr (Ptr CChar -> Ptr CChar -> CSize) -> -- Pointer to comparison function
+        StablePtr (MSeq a) -> -- Pointer to table of accepted candidates
+        CUIntPtr -> -- Starting address of Memory chunk
+        CUIntPtr -> -- Size of Memory Chunk
+        Ptr CChar -> -- Pointer to Memory chunk data
+        Ptr CChar -> -- Pointer to reference value
+        CSize -> -- sizeof reference value
+        IO ()
 
-makeMSeq :: IO (MSeq a)
-makeMSeq = newIORef empty
-
-push :: MSeq a -> a -> IO ()
-push seqRef element = do
-    mseq <- readIORef seqRef
-    writeIORef seqRef (mseq |> element)
-
-toList :: MSeq a -> IO [a]
-toList seqRef = do
-    mseq <- readIORef seqRef
-    return $ F.toList mseq
-
-data CFilter = CFilter {cfTypes :: [T.Type]}
-
--- This whole thing is dumb because we are
--- 1. Loading the data using FFI
--- 2. Converting it to ByteString
--- 3. Converting the bytestring to a Ptr
--- 4. Scanning using FFI
---
--- We might as well just use C
-
-maxSizeOf :: [T.Type] -> Size
-maxSizeOf types = output
+decodeTypes :: CUInt -> Int -> [T.Type]
+decodeTypes x s =
+    i8
+        ++ i16
+        ++ i32
+        ++ i64
+        ++ u8
+        ++ u16
+        ++ u32
+        ++ u64
+        ++ f
+        ++ d
+        ++ b
   where
-    output = foldr max 0 (map T.sizeOf types)
+    i8 = if testBit x 0 then [T.Int8] else []
+    i16 = if testBit x 1 then [T.Int16] else []
+    i32 = if testBit x 2 then [T.Int32] else []
+    i64 = if testBit x 3 then [T.Int64] else []
+    u8 = if testBit x 4 then [T.UInt8] else []
+    u16 = if testBit x 5 then [T.UInt16] else []
+    u32 = if testBit x 6 then [T.UInt32] else []
+    u64 = if testBit x 7 then [T.UInt64] else []
+    f = if testBit x 8 then [T.Flt] else []
+    d = if testBit x 9 then [T.Dbl] else []
+    b = if testBit x 10 then [T.Bytes s] else []
 
-foreign import capi safe "ChunkReader.c scan"
-    c_scan :: StablePtr (MSeq Int) -> Ptr CChar -> Int -> Int -> FunPtr (Ptr CChar -> Int -> Bool) -> Int -> IO ()
+appendMatch :: StablePtr (MSeq PT.Candidate) -> CUIntPtr -> CUInt -> Ptr CChar -> CSize -> IO ()
+appendMatch tblPtr cAddr cMatch cDataPtr cDataSize = do
+    let types = decodeTypes cMatch (fromIntegral cDataSize)
+    let cslenData = (cDataPtr, fromIntegral cDataSize) :: CStringLen
+    bsData <- BS.packCStringLen cslenData
+    let match =
+            PT.Candidate
+                { PT.cAddress = fromIntegral cAddr
+                , PT.cData = bsData
+                , PT.cTypes = types
+                , PT.cRegionID = 0
+                }
 
-foreign import capi safe "ChunkReader.c &int32_eq"
-    c_int32eq :: FunPtr (Ptr CChar -> Int -> Bool)
+    tbl <- deRefStablePtr tblPtr
+    push tbl match
+    return ()
 
-appendAddr :: StablePtr (MSeq Address) -> Int -> IO ()
-appendAddr refptr value = do
-    ref <- deRefStablePtr refptr
-    push ref (fromIntegral value)
+foreign export capi appendMatch :: StablePtr (MSeq PT.Candidate) -> CUIntPtr -> CUInt -> Ptr CChar -> CSize -> IO ()
 
-foreign export capi appendAddr :: StablePtr (MSeq Int) -> Int -> IO ()
+getBSPtr :: BS.ByteString -> Ptr CChar
+getBSPtr bs = castPtr ptr
+  where
+    (fptr, _) = BSI.toForeignPtr0 bs
+    ptr = unsafeForeignPtrToPtr fptr
 
-regionScanHelper :: IO.RInterface -> CFilter -> Size -> (Address, Address) -> Default.ScanOptions -> IO [Default.Candidate]
-regionScanHelper rinterface fltr regid (start_address, end_address) scopt = do
-    if start_address >= end_address
-        then return []
+regionScanHelper ::
+    StablePtr (MSeq PT.Candidate) -> -- Pointer to Candidate Table
+    Ptr CChar -> -- Pointer to Reference bytestring
+    IO.RInterface -> -- Read Interface
+    CFilter -> -- The Filter in question
+    (Address, Address) -> -- (Start_Address, End_Address) of chunk
+    Size -> -- Chunk Size
+    IO ()
+--
+regionScanHelper matchSeqPtr refPtr rInterface cFltr (startAddr, endAddr) chunkSize = do
+    if startAddr >= endAddr
+        then return ()
         else do
-            let chunk_size = Default.soChunkSize scopt
-            let types = cfTypes fltr
-            let max_size = maxSizeOf types
-            let offset_size = min (end_address - start_address) chunk_size
-            let read_size = min (end_address - start_address) (chunk_size + max_size)
-            let offset = [0 .. offset_size]
-            tail <- regionScanHelper rinterface fltr regid (start_address + offset_size + 1, end_address) scopt
-            chunk <- rinterface start_address read_size
+            let maxSize = cfMaxSize cFltr
+
+            let offset_size = min (endAddr - startAddr) chunkSize
+            let read_size = min (endAddr - startAddr) (chunkSize + maxSize)
+
+            regionScanHelper matchSeqPtr refPtr rInterface cFltr (startAddr + offset_size + 1, endAddr) chunkSize
+
+            chunk <- rInterface startAddr read_size
             if IO.mcOk chunk
                 then do
-                    addrSeq <- makeMSeq :: IO (MSeq Address)
-                    addrSeqPtr <- newStablePtr addrSeq
-                    let (bsFptr, bsSize) = BSI.toForeignPtr0 . IO.mcData $ chunk
-                    let bsPtr = unsafeForeignPtrToPtr bsFptr
-                    c_scan addrSeqPtr (castPtr bsPtr) 0 read_size c_int32eq 42
-                    addrlist <- toList addrSeq
-                    let candidates = map (\addr -> Default.Candidate addr BS.empty types regid) addrlist
-                    return $ candidates ++ tail
+                    let dataPtr = getBSPtr (IO.mcData chunk)
+                    c_scan (cfFPtr cFltr) matchSeqPtr (fromIntegral startAddr) (fromIntegral offset_size) dataPtr refPtr (fromIntegral maxSize)
+                    return ()
                 else do
-                    putStrLn $ printf "Failed to load chunk (%8x, %8x) of region %d" start_address (start_address + chunk_size) regid
-                    return tail
+                    putStrLn $ printf "Failed to load chunk (%8x, %8x) of region." startAddr (startAddr + chunkSize)
+                    return ()
 
-regionScan :: IO.RInterface -> CFilter -> Maps.Region -> Default.ScanOptions -> IO [Default.Candidate]
-regionScan rinterface fltr region scopt = do
-    let rid = Maps.rID region
+regionScan :: IO.RInterface -> CFilter -> Maps.Region -> Size -> IO [PT.Candidate]
+regionScan rInterface cFltr region chunkSize = do
+    matchSeq <- makeMSeq :: IO (MSeq PT.Candidate)
+    matchSeqPtr <- newStablePtr matchSeq
     let sa = Maps.rStartAddr region
     let ea = Maps.rEndAddr region
-    candidates <- regionScanHelper rinterface fltr rid (sa, ea) scopt
+    let refPtr = getBSPtr (cfReference cFltr)
+    let regID = Maps.rID region
+
+    regionScanHelper matchSeqPtr refPtr rInterface cFltr (sa, ea) chunkSize
+    matches' <- toList matchSeq
+    let candidates = map (\candidate -> candidate{PT.cRegionID = regID}) matches'
     return candidates
 
-regionScanLog :: Maps.Region -> [Default.Candidate] -> IO ()
+regionScanLog :: Maps.Region -> [PT.Candidate] -> IO ()
 regionScanLog reg result = do
     if length result == 0 then return () else putStrLn $ printf "Extracted %4d candidates from Region %4d (size = %8x)" (length result) (Maps.rID reg) ((Maps.rEndAddr reg) - (Maps.rStartAddr reg))
 
@@ -108,9 +137,10 @@ vocal log action input = do
     log input output
     return output
 
-scanMapHelper :: Default.ScanOptions -> CFilter -> Maps.MapInfo -> IO [Default.Candidate]
-scanMapHelper scopt fltr map = do
-    let stopsig = Default.soSIGSTOP scopt
+scanMapHelper :: PT.ScanOptions -> CFilter -> Maps.MapInfo -> IO [PT.Candidate]
+scanMapHelper scopt cFltr map = do
+    let chunkSize = PT.soChunkSize scopt
+    let stopsig = PT.soSIGSTOP scopt
     let pid = Maps.miPID map
     let regions = Maps.miRegions map
     candidates <-
@@ -118,17 +148,22 @@ scanMapHelper scopt fltr map = do
             pid
             stopsig
             ( \rinterface -> do
-                let action = vocal regionScanLog (\x -> regionScan rinterface fltr x scopt) :: Maps.Region -> IO [Default.Candidate]
-                fc <- forM regions action :: IO [[Default.Candidate]]
+                let action = vocal regionScanLog (\x -> regionScan rinterface cFltr x chunkSize) :: Maps.Region -> IO [PT.Candidate]
+                fc <- forM regions action :: IO [[PT.Candidate]]
                 return $ concat fc
             )
     return $ candidates
 
-scanMapS :: Default.ScanOptions -> CFilter -> Maps.MapInfo -> IO Default.PeepState
+scanMapS :: PT.ScanOptions -> CFilter -> Maps.MapInfo -> IO PT.PeepState
 scanMapS scopt fltr map = do
     let pid = (Maps.miPID map)
     candidates <- scanMapHelper scopt fltr map
-    return Default.PeepState{Default.psPID = pid, Default.psCandidates = candidates, Default.psRegions = map}
+    return PT.PeepState{PT.psPID = pid, PT.psCandidates = candidates, PT.psRegions = map}
 
-scanMap :: CFilter -> Maps.MapInfo -> IO Default.PeepState
-scanMap = scanMapS Default.defaultScanOptions
+scanMap :: CFilter -> Maps.MapInfo -> IO PT.PeepState
+scanMap = scanMapS PT.defaultScanOptions
+
+maxSizeOf :: [T.Type] -> Size
+maxSizeOf types = output
+  where
+    output = foldr max 0 (map T.sizeOf types)

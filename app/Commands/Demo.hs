@@ -4,6 +4,7 @@ import Commands.Base
 import Control.Exception
 import Data.List (elem)
 import qualified Data.Map as Map
+import qualified PeepingTom.Experimental.Fast.Filters as FFilter
 import qualified PeepingTom.Experimental.Fast.State as Fast
 import qualified PeepingTom.Filters as PTFilter
 import qualified PeepingTom.Maps as PTMap
@@ -59,7 +60,7 @@ filterMap RFReadPerm map = PTMap.filterMap (PTMap.filterR) map
 filterMap RFWritePerm map = PTMap.filterMap (PTMap.filterW) map
 filterMap RFAll map = map
 
-scanNew :: Fast.CFilter -> State -> IO State
+scanNew :: FFilter.CFilter -> State -> IO State
 scanNew fltr state = do
     let types = (oScanTypes . sOptions $ state)
     let stopsig = (oSendStopSig . sOptions $ state)
@@ -69,13 +70,13 @@ scanNew fltr state = do
     let stateName = sCurrentState state
     all_maps <- PTMap.getMapInfo pid
     let maps = filterMap (oRFilter . sOptions $ state) all_maps
-    ptstate <- Fast.scanMapS options (Fast.CFilter [PTType.Int32]) maps
+    ptstate <- Fast.scanMapS options fltr maps
     putStrLn $ PTState.showState 5 5 ptstate
     let newmap = Map.insert stateName ptstate (sStates state) :: PTMap
     let newstate = state{sStates = newmap}
     return newstate
 
-scanAction' :: Fast.CFilter -> State -> IO State
+scanAction' :: FFilter.CFilter -> State -> IO State
 scanAction' fltr state = do
     let stateName = sCurrentState (state) :: String
     let maybePTState = Map.lookup stateName (sStates state) :: Maybe PTState.PeepState
@@ -84,7 +85,7 @@ scanAction' fltr state = do
         Just ptState -> do
             return state
 
-scanAction :: Fast.CFilter -> State -> IO State
+scanAction :: FFilter.CFilter -> State -> IO State
 scanAction fltr state = catch (scanAction' fltr state) handler
   where
     handler :: SomeException -> IO State
@@ -98,7 +99,7 @@ cmdHelp = "\n$: Extract candidates from regions of virtual memory.\n\nUsage:\n\n
 eqIntAction :: VArg -> State -> IO State
 eqIntAction (VAInt num) state = do
     let types = [PTType.Int32]
-    let fltr = Fast.CFilter types
+    let fltr = FFilter.eqInt num
     new_state <- scanAction fltr state
     return new_state
 eqIntAction _ state = do
@@ -106,9 +107,6 @@ eqIntAction _ state = do
     return state
 
 eqStrAction :: VArg -> State -> IO State
-eqStrAction (VAStr str) state = do
-    new_state <- scanAction (Fast.CFilter []) state
-    return new_state
 eqStrAction _ state = do
     putStrLn $ "Internal error :("
     return state

@@ -5,7 +5,9 @@ module Main where
 
 import Foreign.C
 import qualified PeepingTom.Conversions as Conversions
+import qualified PeepingTom.Experimental.Fast.Filters as FastFilter
 import qualified PeepingTom.Experimental.Fast.State as Fast
+import qualified PeepingTom.Filters as FFilter
 import qualified PeepingTom.Filters as Filters
 import qualified PeepingTom.Maps as Maps
 import qualified PeepingTom.State as State
@@ -68,7 +70,7 @@ run_peeptom_fast pid value = do
     all_maps <- Maps.getMapInfo pid
     let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
     let fltr = Filters.eqInt value
-    state <- Fast.scanMap (Fast.CFilter [Type.Int32]) maps
+    state <- Fast.scanMap (FastFilter.i32Eq value) maps
     return ()
 
 main :: IO ()

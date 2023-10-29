@@ -8,7 +8,7 @@ maintainer: lesserfish@pm.me
 category: System
 build-type: Simple
 extra-doc-files: CHANGELOG.md
-extra-source-files: src/PeepingTom/helper.h, src/PeepingTom/Experimental/Fast/ChunkReader.c
+extra-source-files: src/PeepingTom/helper.h, src/PeepingTom/Experimental/Fast/C/ChunkReader.c
 
 common warnings
   ghc-options:
@@ -26,6 +26,8 @@ library PeepingTom-lib
                     PeepingTom.Writer, 
                     PeepingTom.Experimental.PT, 
                     PeepingTom.Experimental.Fast.State,
+                    PeepingTom.Experimental.Fast.Filters,
+                    PeepingTom.Experimental.Fast.MSeq,
   build-depends:    base >= 4.18.0.0,
                     bytestring >= 0.11.4.0,
                     split >= 0.2.3.5,
