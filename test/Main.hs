@@ -5,6 +5,8 @@ module Main where
 
 import Foreign.C
 import qualified PeepingTom.Conversions as Conversions
+import qualified PeepingTom.Experimental.Fast.Filters as FastFilters
+import qualified PeepingTom.Experimental.Fast.State as FastState
 import qualified PeepingTom.Filters as Filters
 import qualified PeepingTom.Maps as Maps
 import qualified PeepingTom.State as State
@@ -148,6 +150,44 @@ test4 = do
             )
     return status
 
+test5 :: IO Bool
+test5 = do
+    status <-
+        withProcess
+            ( \pid -> do
+                all_maps <- Maps.getMapInfo pid
+                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
+                let fltr = FastFilters.eqInt 49
+                state <- FastState.scanMap fltr maps
+                pause_process pid
+                let peeptom_matches = length . State.psCandidates $ state
+                scanmem_matches <- get_matchesi pid 49
+                putStrLn $ printf "test:\n"
+                putStrLn $ printf "%d should be equal to %d" peeptom_matches scanmem_matches
+                putStrLn $ printf "%s" (if peeptom_matches == scanmem_matches then "Success!\n\n" else "Failure :c\n\n")
+                return $ peeptom_matches == scanmem_matches
+            )
+    return status
+
+test6 :: IO Bool
+test6 = do
+    status <-
+        withProcess
+            ( \pid -> do
+                all_maps <- Maps.getMapInfo pid
+                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
+                let fltr = FastFilters.i64Eq 49
+                state <- FastState.scanMap fltr maps
+                pause_process pid
+                let peeptom_matches = length . State.psCandidates $ state
+                scanmem_matches <- get_matches64 pid 49
+                putStrLn $ printf "Test:\n"
+                putStrLn $ printf "%d should be equal to %d" peeptom_matches scanmem_matches
+                putStrLn $ printf "%s" (if peeptom_matches == scanmem_matches then "Success!\n\n" else "Failure :c\n\n")
+                return $ peeptom_matches == scanmem_matches
+            )
+    return status
+
 test :: Int -> IO ()
 test 1 = do
     ok <- test1
@@ -161,6 +201,12 @@ test 3 = do
 test 4 = do
     ok <- test4
     if ok then return () else exitWith (ExitFailure 1)
+test 5 = do
+    ok <- test5
+    if ok then return () else exitWith (ExitFailure 1)
+test 6 = do
+    ok <- test6
+    if ok then return () else exitWith (ExitFailure 1)
 test _ = return ()
 
 testall :: IO ()
@@ -169,6 +215,8 @@ testall = do
     test 2
     test 3
     test 4
+    test 5
+    test 6
 
 main :: IO ()
 main = do
