@@ -6,9 +6,13 @@ module PeepingTom.Experimental.Fast.Filters where
 
 import qualified Data.ByteString as BS
 import qualified Data.Int as I
+import Data.Maybe (catMaybes)
 import Foreign.C
 import Foreign.Ptr
 import qualified PeepingTom.Conversions as Conv
+import PeepingTom.Experimental.Fast.Common
+import PeepingTom.Internal
+import qualified PeepingTom.State as PT
 import qualified PeepingTom.Type as T
 
 data CFilter = CFilter
@@ -16,6 +20,14 @@ data CFilter = CFilter
     , cfMaxSize :: Int
     , cfReference :: BS.ByteString
     }
+
+foreign import capi safe "C/Filters.c call"
+    c_call ::
+        FunPtr (Ptr CChar -> Ptr CChar -> CSize -> CUInt) -> -- Pointer to comparison function
+        Ptr CChar -> -- Pointer to Memory chunk data
+        Ptr CChar -> -- Pointer to reference value
+        CSize -> -- sizeof reference value
+        IO CUInt
 
 foreign import capi safe "C/Filters.c &i8_eq"
     c_i8eq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize -> CUInt)
@@ -86,3 +98,32 @@ eqInt value = CFilter func 8 bsData
   where
     !bsData = Conv.i64ToBS (fromInteger value)
     !func = pickIntFunPtr value
+
+maxSizeOf :: [T.Type] -> Size
+maxSizeOf types = output
+  where
+    output = foldr max 0 (map T.sizeOf types)
+
+candidateFilter :: CFilter -> PT.Candidate -> IO (Maybe PT.Candidate)
+candidateFilter cFltr candidate = do
+    let bsData = PT.cData candidate
+    let bsPtr = getBSPtr bsData
+    let ref = cfReference cFltr
+    let refPtr = getBSPtr ref
+    let funPtr = cfFPtr cFltr
+    let size = maxSizeOf (PT.cTypes candidate)
+    encodedTypes <- c_call funPtr bsPtr refPtr (fromIntegral size)
+    let types = decodeTypes encodedTypes size
+    if length types == 0
+        then return Nothing
+        else do
+            let new_size = maxSizeOf types
+            let newBS = BS.take new_size bsData
+            return $ Just candidate{PT.cTypes = types, PT.cData = newBS}
+
+applyFilter :: CFilter -> PT.PeepState -> IO PT.PeepState
+applyFilter fltr state = do
+    candidates' <- mapM (candidateFilter fltr) (PT.psCandidates state) :: IO [Maybe PT.Candidate]
+    let candidates = catMaybes candidates'
+    let output = state{PT.psCandidates = candidates}
+    return output

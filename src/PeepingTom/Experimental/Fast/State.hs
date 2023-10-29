@@ -13,6 +13,7 @@ import Foreign.C.Types
 import Foreign.Ptr
 import Foreign.StablePtr
 import GHC.ForeignPtr
+import PeepingTom.Experimental.Fast.Common
 import PeepingTom.Experimental.Fast.Filters
 import PeepingTom.Experimental.Fast.MSeq
 import qualified PeepingTom.IO as IO
@@ -33,40 +34,6 @@ foreign import capi safe "C/Scanner.c scan"
         CSize -> -- sizeof reference value
         IO ()
 
-foreign import capi safe "C/Filters.c call"
-    c_call ::
-        FunPtr (Ptr CChar -> Ptr CChar -> CSize -> CUInt) -> -- Pointer to comparison function
-        Ptr CChar -> -- Pointer to Memory chunk data
-        Ptr CChar -> -- Pointer to reference value
-        CSize -> -- sizeof reference value
-        IO CUInt
-
-decodeTypes :: CUInt -> Int -> [T.Type]
-decodeTypes x s =
-    i8
-        ++ i16
-        ++ i32
-        ++ i64
-        ++ u8
-        ++ u16
-        ++ u32
-        ++ u64
-        ++ f
-        ++ d
-        ++ b
-  where
-    i8 = if testBit x 0 then [T.Int8] else []
-    i16 = if testBit x 1 then [T.Int16] else []
-    i32 = if testBit x 2 then [T.Int32] else []
-    i64 = if testBit x 3 then [T.Int64] else []
-    u8 = if testBit x 4 then [T.UInt8] else []
-    u16 = if testBit x 5 then [T.UInt16] else []
-    u32 = if testBit x 6 then [T.UInt32] else []
-    u64 = if testBit x 7 then [T.UInt64] else []
-    f = if testBit x 8 then [T.Flt] else []
-    d = if testBit x 9 then [T.Dbl] else []
-    b = if testBit x 10 then [T.Bytes s] else []
-
 appendMatch :: StablePtr (MSeq PT.Candidate) -> CUIntPtr -> CUInt -> Ptr CChar -> CSize -> IO ()
 appendMatch tblPtr cAddr cMatch cDataPtr cDataSize = do
     let types = decodeTypes cMatch (fromIntegral cDataSize)
@@ -85,12 +52,6 @@ appendMatch tblPtr cAddr cMatch cDataPtr cDataSize = do
     return ()
 
 foreign export capi appendMatch :: StablePtr (MSeq PT.Candidate) -> CUIntPtr -> CUInt -> Ptr CChar -> CSize -> IO ()
-
-getBSPtr :: BS.ByteString -> Ptr CChar
-getBSPtr bs = castPtr ptr
-  where
-    (fptr, _) = BSI.toForeignPtr0 bs
-    ptr = unsafeForeignPtrToPtr fptr
 
 regionScanHelper ::
     StablePtr (MSeq PT.Candidate) -> -- Pointer to Candidate Table
@@ -176,27 +137,3 @@ maxSizeOf :: [T.Type] -> Size
 maxSizeOf types = output
   where
     output = foldr max 0 (map T.sizeOf types)
-
-candidateFilter :: CFilter -> PT.Candidate -> IO (Maybe PT.Candidate)
-candidateFilter cFltr candidate = do
-    let bsData = PT.cData candidate
-    let bsPtr = getBSPtr bsData
-    let ref = cfReference cFltr
-    let refPtr = getBSPtr ref
-    let funPtr = cfFPtr cFltr
-    let size = maxSizeOf (PT.cTypes candidate)
-    encodedTypes <- c_call funPtr bsPtr refPtr (fromIntegral size)
-    let types = decodeTypes encodedTypes size
-    if length types == 0
-        then return Nothing
-        else do
-            let new_size = maxSizeOf types
-            let newBS = BS.take new_size bsData
-            return $ Just candidate{PT.cTypes = types, PT.cData = newBS}
-
-applyFilter :: CFilter -> PT.PeepState -> IO PT.PeepState
-applyFilter fltr state = do
-    candidates' <- mapM (candidateFilter fltr) (PT.psCandidates state) :: IO [Maybe PT.Candidate]
-    let candidates = catMaybes candidates'
-    let output = state{PT.psCandidates = candidates}
-    return output
