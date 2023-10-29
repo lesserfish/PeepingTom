@@ -17,28 +17,28 @@ data CFilter = CFilter
     , cfReference :: BS.ByteString
     }
 
-foreign import capi safe "C/ChunkReader.c &i8_eq"
+foreign import capi safe "C/Filters.c &i8_eq"
     c_i8eq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize)
 
-foreign import capi safe "C/ChunkReader.c &i16_eq"
+foreign import capi safe "C/Filters.c &i16_eq"
     c_i16eq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize)
 
-foreign import capi safe "C/ChunkReader.c &i32_eq"
+foreign import capi safe "C/Filters.c &i32_eq"
     c_i32eq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize)
 
-foreign import capi safe "C/ChunkReader.c &i64_eq"
+foreign import capi safe "C/Filters.c &i64_eq"
     c_i64eq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize)
 
-foreign import capi safe "C/ChunkReader.c &int_eq"
+foreign import capi safe "C/Filters.c &int_eq"
     c_inteq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize)
 
-foreign import capi safe "C/ChunkReader.c &int16p_eq"
+foreign import capi safe "C/Filters.c &int16p_eq"
     c_int16peq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize)
 
-foreign import capi safe "C/ChunkReader.c &int32p_eq"
+foreign import capi safe "C/Filters.c &int32p_eq"
     c_int32peq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize)
 
-foreign import capi safe "C/ChunkReader.c &voidf"
+foreign import capi safe "C/Filters.c &voidf"
     c_void :: FunPtr (Ptr CChar -> Ptr CChar -> CSize)
 
 i8Eq :: Integer -> CFilter
