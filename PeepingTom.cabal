@@ -8,7 +8,10 @@ maintainer: lesserfish@pm.me
 category: System
 build-type: Simple
 extra-doc-files: CHANGELOG.md
-extra-source-files: src/PeepingTom/helper.h, src/PeepingTom/Experimental/Fast/C/ChunkReader.c, src/PeepingTom/Experimental/Fast/C/Filters.c
+extra-source-files: src/PeepingTom/helper.h, 
+                    src/PeepingTom/Experimental/Fast/C/Filters.c,
+                    src/PeepingTom/Experimental/Fast/C/Scanner.c, 
+
 
 common warnings
   ghc-options:
@@ -54,6 +57,7 @@ test-suite PeepingTom-test
     extra-include-dirs: test/scanmem/
     extra-lib-dirs: test/scanmem/build/.libs/
     extra-libraries: scanmem
+
 executable PeepingTom-speedtest
     import:           warnings
     default-language: Haskell2010
@@ -67,7 +71,6 @@ executable PeepingTom-speedtest
     extra-include-dirs: test/scanmem/
     extra-lib-dirs: test/scanmem/build/.libs/
     extra-libraries: scanmem
-
 
 executable PeepingTom
   main-is: CLI.hs
@@ -101,4 +104,10 @@ executable PeepingTom
                  containers >= 0.6.7
   hs-source-dirs: app
   default-language: Haskell2010
-  ghc-options: -O2 -prof -rtsopts -fprof-auto 
+  ghc-options: -O2 
+  extra-source-files: src/PeepingTom/helper.h, 
+                    src/PeepingTom/Experimental/Fast/C/Filters.h,
+                    src/PeepingTom/Experimental/Fast/C/Scanner.c, 
+
+
+--prof -rtsopts -fprof-auto 

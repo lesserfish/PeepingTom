@@ -12,34 +12,34 @@ import qualified PeepingTom.Conversions as Conv
 import qualified PeepingTom.Type as T
 
 data CFilter = CFilter
-    { cfFPtr :: FunPtr (Ptr CChar -> Ptr CChar -> CSize)
+    { cfFPtr :: FunPtr (Ptr CChar -> Ptr CChar -> CSize -> CUInt)
     , cfMaxSize :: Int
     , cfReference :: BS.ByteString
     }
 
 foreign import capi safe "C/Filters.c &i8_eq"
-    c_i8eq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize)
+    c_i8eq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize -> CUInt)
 
 foreign import capi safe "C/Filters.c &i16_eq"
-    c_i16eq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize)
+    c_i16eq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize -> CUInt)
 
 foreign import capi safe "C/Filters.c &i32_eq"
-    c_i32eq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize)
+    c_i32eq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize -> CUInt)
 
 foreign import capi safe "C/Filters.c &i64_eq"
-    c_i64eq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize)
+    c_i64eq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize -> CUInt)
 
 foreign import capi safe "C/Filters.c &int_eq"
-    c_inteq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize)
+    c_inteq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize -> CUInt)
 
 foreign import capi safe "C/Filters.c &int16p_eq"
-    c_int16peq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize)
+    c_int16peq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize -> CUInt)
 
 foreign import capi safe "C/Filters.c &int32p_eq"
-    c_int32peq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize)
+    c_int32peq :: FunPtr (Ptr CChar -> Ptr CChar -> CSize -> CUInt)
 
 foreign import capi safe "C/Filters.c &voidf"
-    c_void :: FunPtr (Ptr CChar -> Ptr CChar -> CSize)
+    c_void :: FunPtr (Ptr CChar -> Ptr CChar -> CSize -> CUInt)
 
 i8Eq :: Integer -> CFilter
 i8Eq value = CFilter c_i8eq 1 bsData
@@ -73,7 +73,7 @@ i32Range x = x >= fromIntegral (minBound :: I.Int32) && x <= fromIntegral (maxBo
 i64Range :: Integer -> Bool
 i64Range x = x >= fromIntegral (minBound :: I.Int64) && x <= fromIntegral (maxBound :: I.Int64)
 
-pickIntFunPtr :: Integer -> FunPtr (Ptr CChar -> Ptr CChar -> CSize)
+pickIntFunPtr :: Integer -> FunPtr (Ptr CChar -> Ptr CChar -> CSize -> CUInt)
 pickIntFunPtr value
     | i8Range value = c_inteq
     | i16Range value = c_int16peq

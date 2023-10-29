@@ -14,6 +14,13 @@
 #define Dbl 0x0200
 #define Bytes 0x0400
 
+
+
+uint8_t call (uint8_t (*filter)(char *, char*, size_t), char* data, char* reference, size_t size)
+{
+    return (*filter)(data, reference, size);
+}
+
 // Tests for equality of Int8
 uint8_t i8_eq(char *ptr, char* ref, size_t)
 {
