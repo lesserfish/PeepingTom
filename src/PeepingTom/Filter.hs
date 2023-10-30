@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 
-module PeepingTom.Filters (
+module PeepingTom.Filter (
     Filter,
     FilterInfo,
     compareBS,
@@ -15,6 +15,7 @@ module PeepingTom.Filters (
     i64Eq,
     eqStr,
     eqBS,
+    applyFilter,
 ) where
 
 import qualified Data.ByteString as BS
@@ -22,15 +23,33 @@ import qualified Data.ByteString.Char8 as BSC
 import Data.Functor ((<$>))
 import qualified Data.Int as I
 import Data.List (any, intersperse)
-import Data.Maybe (Maybe, fromMaybe)
+import Data.Maybe (Maybe, fromMaybe, mapMaybe)
 import Data.Typeable (Typeable, typeOf)
 import Debug.Trace
+import PeepingTom.Common
 import PeepingTom.Conversions
+import PeepingTom.State
 import PeepingTom.Type
 import Text.Printf
 
 type FilterInfo = (Filter, Int)
 type Filter = BS.ByteString -> [Type]
+
+applyFilter :: FilterInfo -> PeepState -> PeepState
+applyFilter fltr state = output
+  where
+    candidates' = mapMaybe (candidateFilter fltr) (psCandidates state)
+    output = state{psCandidates = candidates'}
+
+candidateFilter :: FilterInfo -> Candidate -> Maybe Candidate
+candidateFilter (fltr, _) candidate = output
+  where
+    bsData = cData $ candidate :: BS.ByteString
+    valid_types = fltr bsData :: [Type]
+    output = if length valid_types == 0 then Nothing else candidate'
+    max_size = maxSizeOf valid_types
+    bsData' = BS.take max_size bsData -- Only store that amount of bytes
+    candidate' = Just candidate{cData = bsData', cTypes = valid_types}
 
 castInteger :: Type -> BS.ByteString -> Maybe Integer
 castInteger Int8 b = Just . toInteger $ i8FromBS b
@@ -46,16 +65,8 @@ castInteger _ _ = Nothing
 ifLargeEnough :: Type -> BS.ByteString -> Maybe a -> Maybe a
 ifLargeEnough t bs a = if (BS.length bs) < (sizeOf t) then Nothing else a
 
-compareInt' :: (Integer -> Bool) -> BS.ByteString -> Type -> Maybe Bool
-compareInt' fltr bs t = fltr <$> (ifLargeEnough t bs (castInteger t bs))
-
 bsToString :: BS.ByteString -> String
 bsToString bs = concat $ intersperse " " (fmap (printf "0x%02X") (BS.unpack bs))
-
--- compareInt :: (Integer -> Bool) -> Filter
--- compareInt fltr bs = output
---  where
---    output = fromMaybe False (compareInt' fltr bs t)
 
 -- ByteString
 eqBS' :: BS.ByteString -> Filter

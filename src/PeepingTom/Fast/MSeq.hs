@@ -1,4 +1,9 @@
-module PeepingTom.Experimental.Fast.MSeq where
+module PeepingTom.Fast.MSeq (
+    MSeq,
+    makeMSeq,
+    push,
+    toList,
+) where
 
 import qualified Data.Foldable as F
 import Data.IORef

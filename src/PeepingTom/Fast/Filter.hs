@@ -2,18 +2,26 @@
 {-# LANGUAGE CApiFFI #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 
-module PeepingTom.Experimental.Fast.Filters where
+module PeepingTom.Fast.Filter (
+    applyFilter,
+    CFilter (..),
+    eqInt,
+    i8Eq,
+    i16Eq,
+    i32Eq,
+    i64Eq,
+) where
 
 import qualified Data.ByteString as BS
 import qualified Data.Int as I
 import Data.Maybe (catMaybes)
 import Foreign.C
 import Foreign.Ptr
-import qualified PeepingTom.Conversions as Conv
-import PeepingTom.Experimental.Fast.Common
+import PeepingTom.Conversions
+import PeepingTom.Fast.Common
 import PeepingTom.Internal
-import qualified PeepingTom.State as PT
-import qualified PeepingTom.Type as T
+import PeepingTom.State
+import PeepingTom.Type
 
 data CFilter = CFilter
     { cfFPtr :: FunPtr (Ptr CChar -> Ptr CChar -> CSize -> CUInt)
@@ -56,22 +64,22 @@ foreign import capi safe "C/Filters.c &voidf"
 i8Eq :: Integer -> CFilter
 i8Eq value = CFilter c_i8eq 1 bsData
   where
-    !bsData = Conv.i8ToBS (fromInteger value)
+    !bsData = i8ToBS (fromInteger value)
 
 i16Eq :: Integer -> CFilter
 i16Eq value = CFilter c_i16eq 2 bsData
   where
-    !bsData = Conv.i16ToBS (fromInteger value)
+    !bsData = i16ToBS (fromInteger value)
 
 i32Eq :: Integer -> CFilter
 i32Eq value = CFilter c_i32eq 4 bsData
   where
-    !bsData = Conv.i32ToBS (fromInteger value)
+    !bsData = i32ToBS (fromInteger value)
 
 i64Eq :: Integer -> CFilter
 i64Eq value = CFilter c_i64eq 8 bsData
   where
-    !bsData = Conv.i64ToBS (fromInteger value)
+    !bsData = i64ToBS (fromInteger value)
 
 i8Range :: Integer -> Bool
 i8Range x = x >= fromIntegral (minBound :: I.Int8) && x <= fromIntegral (maxBound :: I.Int8)
@@ -96,22 +104,22 @@ pickIntFunPtr value
 eqInt :: Integer -> CFilter
 eqInt value = CFilter func 8 bsData
   where
-    !bsData = Conv.i64ToBS (fromInteger value)
+    !bsData = i64ToBS (fromInteger value)
     !func = pickIntFunPtr value
 
-maxSizeOf :: [T.Type] -> Size
+maxSizeOf :: [Type] -> Size
 maxSizeOf types = output
   where
-    output = foldr max 0 (map T.sizeOf types)
+    output = foldr max 0 (map sizeOf types)
 
-candidateFilter :: CFilter -> PT.Candidate -> IO (Maybe PT.Candidate)
+candidateFilter :: CFilter -> Candidate -> IO (Maybe Candidate)
 candidateFilter cFltr candidate = do
-    let bsData = PT.cData candidate
+    let bsData = cData candidate
     let bsPtr = getBSPtr bsData
     let ref = cfReference cFltr
     let refPtr = getBSPtr ref
     let funPtr = cfFPtr cFltr
-    let size = maxSizeOf (PT.cTypes candidate)
+    let size = maxSizeOf (cTypes candidate)
     encodedTypes <- c_call funPtr bsPtr refPtr (fromIntegral size)
     let types = decodeTypes encodedTypes size
     if length types == 0
@@ -119,11 +127,11 @@ candidateFilter cFltr candidate = do
         else do
             let new_size = maxSizeOf types
             let newBS = BS.take new_size bsData
-            return $ Just candidate{PT.cTypes = types, PT.cData = newBS}
+            return $ Just candidate{cTypes = types, cData = newBS}
 
-applyFilter :: CFilter -> PT.PeepState -> IO PT.PeepState
+applyFilter :: CFilter -> PeepState -> IO PeepState
 applyFilter fltr state = do
-    candidates' <- mapM (candidateFilter fltr) (PT.psCandidates state) :: IO [Maybe PT.Candidate]
+    candidates' <- mapM (candidateFilter fltr) (psCandidates state) :: IO [Maybe Candidate]
     let candidates = catMaybes candidates'
-    let output = state{PT.psCandidates = candidates}
+    let output = state{psCandidates = candidates}
     return output

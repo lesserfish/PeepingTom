@@ -1,26 +1,33 @@
 {-# LANGUAGE CApiFFI #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 
-module PeepingTom.Experimental.Fast.State where
+module PeepingTom.Fast.Scan (
+    scanMapS,
+    scanMap,
+    SlowScan.defaultScanOptions,
+    SlowScan.updateState,
+    SlowScan.updateStateS,
+    SlowScan.ScanOptions (..),
+) where
 
 import Control.Monad (forM)
-import Data.Bits
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Internal as BSI
-import Data.Maybe (catMaybes)
 import Foreign.C
 import Foreign.C.Types
 import Foreign.Ptr
 import Foreign.StablePtr
 import GHC.ForeignPtr
-import PeepingTom.Experimental.Fast.Common
-import PeepingTom.Experimental.Fast.Filters
-import PeepingTom.Experimental.Fast.MSeq
+import PeepingTom.Common
+import PeepingTom.Fast.Common
+import PeepingTom.Fast.Filter
+import PeepingTom.Fast.MSeq
 import qualified PeepingTom.IO as IO
 import PeepingTom.Internal
-import qualified PeepingTom.Maps as Maps
-import qualified PeepingTom.State as PT
-import qualified PeepingTom.Type as T
+import PeepingTom.Map
+import qualified PeepingTom.Scan as SlowScan
+import PeepingTom.State
+import PeepingTom.Type
 import Text.Printf
 
 foreign import capi safe "C/Scanner.c scan"
@@ -34,27 +41,27 @@ foreign import capi safe "C/Scanner.c scan"
         CSize -> -- sizeof reference value
         IO ()
 
-appendMatch :: StablePtr (MSeq PT.Candidate) -> CUIntPtr -> CUInt -> Ptr CChar -> CSize -> IO ()
+appendMatch :: StablePtr (MSeq Candidate) -> CUIntPtr -> CUInt -> Ptr CChar -> CSize -> IO ()
 appendMatch tblPtr cAddr cMatch cDataPtr cDataSize = do
     let types = decodeTypes cMatch (fromIntegral cDataSize)
     let cslenData = (cDataPtr, fromIntegral cDataSize) :: CStringLen
     bsData <- BS.packCStringLen cslenData
     let match =
-            PT.Candidate
-                { PT.cAddress = fromIntegral cAddr
-                , PT.cData = bsData
-                , PT.cTypes = types
-                , PT.cRegionID = 0
+            Candidate
+                { cAddress = fromIntegral cAddr
+                , cData = bsData
+                , cTypes = types
+                , cRegionID = 0
                 }
 
     tbl <- deRefStablePtr tblPtr
     push tbl match
     return ()
 
-foreign export capi appendMatch :: StablePtr (MSeq PT.Candidate) -> CUIntPtr -> CUInt -> Ptr CChar -> CSize -> IO ()
+foreign export capi appendMatch :: StablePtr (MSeq Candidate) -> CUIntPtr -> CUInt -> Ptr CChar -> CSize -> IO ()
 
 regionScanHelper ::
-    StablePtr (MSeq PT.Candidate) -> -- Pointer to Candidate Table
+    StablePtr (MSeq Candidate) -> -- Pointer to Candidate Table
     Ptr CChar -> -- Pointer to Reference bytestring
     IO.RInterface -> -- Read Interface
     CFilter -> -- The Filter in question
@@ -83,57 +90,48 @@ regionScanHelper matchSeqPtr refPtr rInterface cFltr (startAddr, endAddr) chunkS
                     putStrLn $ printf "Failed to load chunk (%8x, %8x) of region." startAddr (startAddr + chunkSize)
                     return ()
 
-regionScan :: IO.RInterface -> CFilter -> Maps.Region -> Size -> IO [PT.Candidate]
+regionScan :: IO.RInterface -> CFilter -> Region -> Size -> IO [Candidate]
 regionScan rInterface cFltr region chunkSize = do
-    matchSeq <- makeMSeq :: IO (MSeq PT.Candidate)
+    matchSeq <- makeMSeq :: IO (MSeq Candidate)
     matchSeqPtr <- newStablePtr matchSeq
-    let sa = Maps.rStartAddr region
-    let ea = Maps.rEndAddr region
+    let sa = rStartAddr region
+    let ea = rEndAddr region
     let refPtr = getBSPtr (cfReference cFltr)
-    let regID = Maps.rID region
+    let regID = rID region
 
     regionScanHelper matchSeqPtr refPtr rInterface cFltr (sa, ea) chunkSize
     matches' <- toList matchSeq
-    let candidates = map (\candidate -> candidate{PT.cRegionID = regID}) matches'
+    let candidates = map (\candidate -> candidate{cRegionID = regID}) matches'
     return candidates
 
-regionScanLog :: Maps.Region -> [PT.Candidate] -> IO ()
+regionScanLog :: Region -> [Candidate] -> IO ()
 regionScanLog reg result = do
-    if length result == 0 then return () else putStrLn $ printf "Extracted %4d candidates from Region %4d (size = %8x)" (length result) (Maps.rID reg) ((Maps.rEndAddr reg) - (Maps.rStartAddr reg))
+    if length result == 0 then return () else putStrLn $ printf "Extracted %4d candidates from Region %4d (size = %8x)" (length result) (rID reg) ((rEndAddr reg) - (rStartAddr reg))
 
-vocal :: (a -> b -> IO ()) -> (a -> IO b) -> a -> (IO b)
-vocal log action input = do
-    output <- action input
-    log input output
-    return output
-
-scanMapHelper :: PT.ScanOptions -> CFilter -> Maps.MapInfo -> IO [PT.Candidate]
+scanMapHelper :: SlowScan.ScanOptions -> CFilter -> MapInfo -> IO [Candidate]
 scanMapHelper scopt cFltr map = do
-    let chunkSize = PT.soChunkSize scopt
-    let stopsig = PT.soSIGSTOP scopt
-    let pid = Maps.miPID map
-    let regions = Maps.miRegions map
+    let chunkSize = SlowScan.soChunkSize scopt
+    let stopsig = SlowScan.soSIGSTOP scopt
+    let pid = miPID map
+    let regions = miRegions map
     candidates <-
         IO.withRInterface
             pid
             stopsig
             ( \rinterface -> do
-                let action = vocal regionScanLog (\x -> regionScan rinterface cFltr x chunkSize) :: Maps.Region -> IO [PT.Candidate]
-                fc <- forM regions action :: IO [[PT.Candidate]]
+                let action = vocal regionScanLog (\x -> regionScan rinterface cFltr x chunkSize) :: Region -> IO [Candidate]
+                fc <- forM regions action :: IO [[Candidate]]
                 return $ concat fc
             )
     return $ candidates
 
-scanMapS :: PT.ScanOptions -> CFilter -> Maps.MapInfo -> IO PT.PeepState
+-- Public Methods:
+
+scanMapS :: SlowScan.ScanOptions -> CFilter -> MapInfo -> IO PeepState
 scanMapS scopt fltr map = do
-    let pid = (Maps.miPID map)
+    let pid = (miPID map)
     candidates <- scanMapHelper scopt fltr map
-    return PT.PeepState{PT.psPID = pid, PT.psCandidates = candidates, PT.psRegions = map}
+    return PeepState{psPID = pid, psCandidates = candidates, psRegions = map}
 
-scanMap :: CFilter -> Maps.MapInfo -> IO PT.PeepState
-scanMap = scanMapS PT.defaultScanOptions
-
-maxSizeOf :: [T.Type] -> Size
-maxSizeOf types = output
-  where
-    output = foldr max 0 (map T.sizeOf types)
+scanMap :: CFilter -> MapInfo -> IO PeepState
+scanMap = scanMapS SlowScan.defaultScanOptions
