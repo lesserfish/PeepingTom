@@ -5,11 +5,12 @@ module Main where
 
 import Foreign.C
 import qualified PeepingTom.Conversions as Conversions
-import qualified PeepingTom.Experimental.Fast.Filters as FastFilter
-import qualified PeepingTom.Experimental.Fast.State as Fast
-import qualified PeepingTom.Filters as FFilter
-import qualified PeepingTom.Filters as Filters
-import qualified PeepingTom.Maps as Maps
+import qualified PeepingTom.Fast.Filter as FastFilter
+import qualified PeepingTom.Fast.Scan as Fast
+import qualified PeepingTom.Filter as FFilter
+import qualified PeepingTom.Filter as Filters
+import qualified PeepingTom.Map as Maps
+import qualified PeepingTom.Scan as Scan
 import qualified PeepingTom.State as State
 import qualified PeepingTom.Type as Type
 import qualified PeepingTom.Writer as Writer
@@ -59,16 +60,16 @@ time action = do
 
 run_peeptom :: Int -> Integer -> IO ()
 run_peeptom pid value = do
-    all_maps <- Maps.getMapInfo pid
-    let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
+    all_maps <- Maps.extractRegions pid
+    let maps = Maps.filterRegions (Maps.defaultRFilter all_maps) all_maps
     let fltr = Filters.eqInt value
-    state <- State.scanMap fltr maps
+    state <- Scan.scanMap fltr maps
     return ()
 
 run_peeptom_fast :: Int -> Integer -> IO ()
 run_peeptom_fast pid value = do
-    all_maps <- Maps.getMapInfo pid
-    let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
+    all_maps <- Maps.extractRegions pid
+    let maps = Maps.filterRegions (Maps.defaultRFilter all_maps) all_maps
     let fltr = Filters.eqInt value
     state <- Fast.scanMap (FastFilter.i32Eq value) maps
     return ()
