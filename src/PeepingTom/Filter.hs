@@ -38,18 +38,18 @@ type Filter = BS.ByteString -> [Type]
 applyFilter :: FilterInfo -> PeepState -> PeepState
 applyFilter fltr state = output
   where
-    candidates' = mapMaybe (candidateFilter fltr) (psCandidates state)
-    output = state{psCandidates = candidates'}
+    matchs' = mapMaybe (matchFilter fltr) (psMatchs state)
+    output = state{psMatchs = matchs'}
 
-candidateFilter :: FilterInfo -> Candidate -> Maybe Candidate
-candidateFilter (fltr, _) candidate = output
+matchFilter :: FilterInfo -> Match -> Maybe Match
+matchFilter (fltr, _) match = output
   where
-    bsData = cData $ candidate :: BS.ByteString
+    bsData = mData $ match :: BS.ByteString
     valid_types = fltr bsData :: [Type]
-    output = if length valid_types == 0 then Nothing else candidate'
+    output = if length valid_types == 0 then Nothing else match'
     max_size = maxSizeOf valid_types
     bsData' = BS.take max_size bsData -- Only store that amount of bytes
-    candidate' = Just candidate{cData = bsData', cTypes = valid_types}
+    match' = Just match{mData = bsData', mTypes = valid_types}
 
 castInteger :: Type -> BS.ByteString -> Maybe Integer
 castInteger Int8 b = Just . toInteger $ i8FromBS b

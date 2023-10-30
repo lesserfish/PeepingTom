@@ -35,44 +35,44 @@ defaultScanOptions = ScanOptions 10000 True
 
 -- Private Methods
 
-candidateFilter :: FilterInfo -> Candidate -> Maybe Candidate
-candidateFilter (fltr, _) candidate = output
+matchFilter :: FilterInfo -> Match -> Maybe Match
+matchFilter (fltr, _) match = output
   where
-    bsData = cData $ candidate :: BS.ByteString
+    bsData = mData $ match :: BS.ByteString
     valid_types = fltr bsData :: [Type]
-    output = if length valid_types == 0 then Nothing else candidate'
+    output = if length valid_types == 0 then Nothing else match'
     max_size = maxSizeOf valid_types
     bsData' = BS.take max_size bsData -- Only store that amount of bytes
-    candidate' = Just candidate{cData = bsData', cTypes = valid_types}
+    match' = Just match{mData = bsData', mTypes = valid_types}
 
-isInChunk :: Candidate -> IO.MemoryChunk -> Bool
-isInChunk candidate chunk = (candidate_addr >= chunk_addr) && (candidate_addr + max_size <= chunk_addr + chunk_size)
+isInChunk :: Match -> IO.MemoryChunk -> Bool
+isInChunk match chunk = (match_addr >= chunk_addr) && (match_addr + max_size <= chunk_addr + chunk_size)
   where
-    candidate_addr = cAddress candidate
-    candidate_types = cTypes candidate
-    max_size = maxSizeOf candidate_types
+    match_addr = mAddress match
+    match_types = mTypes match
+    max_size = maxSizeOf match_types
     chunk_addr = IO.mcStartAddr chunk
     chunk_size = IO.mcSize chunk
 
-filterAddress :: FilterInfo -> Int -> IO.MemoryChunk -> Address -> Maybe Candidate
+filterAddress :: FilterInfo -> Int -> IO.MemoryChunk -> Address -> Maybe Match
 filterAddress (fltr, _) regid chunk offset = output
   where
     address = (IO.mcStartAddr chunk) + offset
     bytes = BS.drop offset (IO.mcData chunk) -- Get all the bytes starting from offset
-    candidate_types = fltr bytes :: [Type]
-    max_size = maxSizeOf candidate_types
+    match_types = fltr bytes :: [Type]
+    max_size = maxSizeOf match_types
     byte_data = BS.take max_size bytes -- Store this amount of bytes
     region_id = regid
-    new_candidate =
-        Candidate
-            { cAddress = address
-            , cData = byte_data
-            , cTypes = candidate_types
-            , cRegionID = region_id
+    new_match =
+        Match
+            { mAddress = address
+            , mData = byte_data
+            , mTypes = match_types
+            , mRegionID = region_id
             }
-    output = if null candidate_types then Nothing else Just new_candidate
+    output = if null match_types then Nothing else Just new_match
 
-regionScanHelper :: IO.RInterface -> FilterInfo -> Size -> (Address, Address) -> ScanOptions -> IO [Candidate]
+regionScanHelper :: IO.RInterface -> FilterInfo -> Size -> (Address, Address) -> ScanOptions -> IO [Match]
 regionScanHelper rinterface fltr regid (start_address, end_address) scopt = do
     if start_address >= end_address
         then return []
@@ -86,68 +86,68 @@ regionScanHelper rinterface fltr regid (start_address, end_address) scopt = do
             chunk <- rinterface start_address read_size
             if IO.mcOk chunk
                 then do
-                    let candidates = mapMaybe (filterAddress fltr regid chunk) offset
-                    evaluate candidates
-                    return $ candidates ++ tail
+                    let matchs = mapMaybe (filterAddress fltr regid chunk) offset
+                    evaluate matchs
+                    return $ matchs ++ tail
                 else do
                     putStrLn $ printf "Failed to load chunk (%8x, %8x) of region %d" start_address (start_address + chunk_size) regid
                     return tail
 
-regionScan :: IO.RInterface -> FilterInfo -> Region -> ScanOptions -> IO [Candidate]
+regionScan :: IO.RInterface -> FilterInfo -> Region -> ScanOptions -> IO [Match]
 regionScan rinterface fltr region scopt = do
     let rid = rID region
     let sa = rStartAddr region
     let ea = rEndAddr region
-    candidates <- regionScanHelper rinterface fltr rid (sa, ea) scopt
-    return candidates
+    matchs <- regionScanHelper rinterface fltr rid (sa, ea) scopt
+    return matchs
 
-regionScanLog :: Region -> [Candidate] -> IO ()
+regionScanLog :: Region -> [Match] -> IO ()
 regionScanLog reg result = do
-    if length result == 0 then return () else putStrLn $ printf "Extracted %4d candidates from Region %4d (size = %8x)" (length result) (rID reg) ((rEndAddr reg) - (rStartAddr reg))
+    if length result == 0 then return () else putStrLn $ printf "Extracted %4d matchs from Region %4d (size = %8x)" (length result) (rID reg) ((rEndAddr reg) - (rStartAddr reg))
 
-scanMapHelper :: ScanOptions -> FilterInfo -> MapInfo -> IO [Candidate]
+scanMapHelper :: ScanOptions -> FilterInfo -> MapInfo -> IO [Match]
 scanMapHelper scopt fltr map = do
     let stopsig = soSIGSTOP scopt
     let pid = miPID map
     let regions = miRegions map
-    candidates <-
+    matchs <-
         IO.withRInterface
             pid
             stopsig
             ( \rinterface -> do
-                let action = vocal regionScanLog (\x -> regionScan rinterface fltr x scopt) :: Region -> IO [Candidate]
-                fc <- forM regions action :: IO [[Candidate]]
+                let action = vocal regionScanLog (\x -> regionScan rinterface fltr x scopt) :: Region -> IO [Match]
+                fc <- forM regions action :: IO [[Match]]
                 return $ concat fc
             )
-    return $ candidates
+    return $ matchs
 
-updateCandidatesHelper :: IO.RInterface -> [Candidate] -> IO.MemoryChunk -> IO [Candidate]
-updateCandidatesHelper _ [] _ = return []
-updateCandidatesHelper rinterface (current : rest) memory_chunk = do
+updateMatchsHelper :: IO.RInterface -> [Match] -> IO.MemoryChunk -> IO [Match]
+updateMatchsHelper _ [] _ = return []
+updateMatchsHelper rinterface (current : rest) memory_chunk = do
     if (isInChunk current memory_chunk)
         then do
-            let offset = (cAddress current) - (IO.mcStartAddr memory_chunk) -- Get the offset of the memory location in the bytestring corresponding to address
-            let valid_types = cTypes current
+            let offset = (mAddress current) - (IO.mcStartAddr memory_chunk) -- Get the offset of the memory location in the bytestring corresponding to address
+            let valid_types = mTypes current
             let byte_counts = map sizeOf valid_types
             let byte_count = foldl max 0 byte_counts
             let new_bytes = slice offset byte_count (IO.mcData memory_chunk)
-            let new_candidate = current{cData = new_bytes}
-            tail <- updateCandidatesHelper rinterface rest memory_chunk
-            return $ [new_candidate] ++ tail
+            let new_match = current{mData = new_bytes}
+            tail <- updateMatchsHelper rinterface rest memory_chunk
+            return $ [new_match] ++ tail
         else do
-            let new_chunk_addr = cAddress current
+            let new_chunk_addr = mAddress current
             let chunk_size = IO.mcSize memory_chunk
             new_chunk <- rinterface new_chunk_addr chunk_size
-            updateCandidatesHelper rinterface (current : rest) new_chunk
+            updateMatchsHelper rinterface (current : rest) new_chunk
 
-updateCandidates :: IO.RInterface -> ScanOptions -> [Candidate] -> IO [Candidate]
-updateCandidates _ _ [] = return []
-updateCandidates rinterface scopt candidates = do
+updateMatchs :: IO.RInterface -> ScanOptions -> [Match] -> IO [Match]
+updateMatchs _ _ [] = return []
+updateMatchs rinterface scopt matchs = do
     let chunk_size = soChunkSize scopt
-    let initial = candidates !! 0
-    let new_chunk_addr = cAddress initial
+    let initial = matchs !! 0
+    let new_chunk_addr = mAddress initial
     chunk <- rinterface new_chunk_addr chunk_size
-    updateCandidatesHelper rinterface candidates chunk
+    updateMatchsHelper rinterface matchs chunk
 
 -- Public Methods
 
@@ -155,10 +155,10 @@ updateStateS :: ScanOptions -> PeepState -> IO PeepState
 updateStateS scopt state = do
     let pid = psPID state
     let stopsig = soSIGSTOP scopt
-    let candidates = psCandidates state
-    let action = (\rinterface -> updateCandidates rinterface scopt candidates) :: IO.RInterface -> IO [Candidate]
-    candidates' <- IO.withRInterface pid stopsig action
-    return $ state{psCandidates = candidates'}
+    let matchs = psMatchs state
+    let action = (\rinterface -> updateMatchs rinterface scopt matchs) :: IO.RInterface -> IO [Match]
+    matchs' <- IO.withRInterface pid stopsig action
+    return $ state{psMatchs = matchs'}
 
 updateState :: PeepState -> IO PeepState
 updateState = updateStateS (defaultScanOptions)
@@ -166,8 +166,8 @@ updateState = updateStateS (defaultScanOptions)
 scanMapS :: ScanOptions -> FilterInfo -> MapInfo -> IO PeepState
 scanMapS scopt fltr map = do
     let pid = (miPID map)
-    candidates <- scanMapHelper scopt fltr map
-    return PeepState{psPID = pid, psCandidates = candidates, psRegions = map}
+    matchs <- scanMapHelper scopt fltr map
+    return PeepState{psPID = pid, psMatchs = matchs, psRegions = map}
 
 scanMap :: FilterInfo -> MapInfo -> IO PeepState
 scanMap = scanMapS defaultScanOptions

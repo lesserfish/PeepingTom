@@ -47,21 +47,21 @@ writeStr str = writeBytes (BSC.pack str)
 writeStr_ :: String -> Writer
 writeStr_ str = writeBytes_ (BSC.pack str)
 
-writeCandidate :: IO.WInterface -> Writer -> Candidate -> IO Candidate
-writeCandidate winterface writer candidate = do
-    let addr = cAddress candidate
-    let maxtype = maxType . cTypes $ candidate -- Get the type with the largest size
+writeMatch :: IO.WInterface -> Writer -> Match -> IO Match
+writeMatch winterface writer match = do
+    let addr = mAddress match
+    let maxtype = maxType . mTypes $ match -- Get the type with the largest size
     let bs_data = writer maxtype -- Get the bytes to write
     let data_size = BS.length bs_data
     if data_size == 0
-        then return candidate -- Writer does not support this type; Don't write anything
+        then return match -- Writer does not support this type; Don't write anything
         else do
             winterface addr bs_data
-            let candidate' = candidate{cData = bs_data}
-            return candidate'
+            let match' = match{mData = bs_data}
+            return match'
 
-applyWriterHelper :: IO.WInterface -> Writer -> [Candidate] -> IO [Candidate]
-applyWriterHelper winterface writer candidates = sequence $ map (writeCandidate winterface writer) candidates
+applyWriterHelper :: IO.WInterface -> Writer -> [Match] -> IO [Match]
+applyWriterHelper winterface writer matchs = sequence $ map (writeMatch winterface writer) matchs
 
 applyWriter :: Writer -> PeepState -> IO PeepState
 applyWriter = applyWriterS defaultScanOptions
@@ -70,7 +70,7 @@ applyWriterS :: ScanOptions -> Writer -> PeepState -> IO PeepState
 applyWriterS scopt writer peepstate = do
     let stopsig = soSIGSTOP scopt
     let pid = psPID peepstate
-    let candidates = psCandidates peepstate
-    let action = (\winterface -> applyWriterHelper winterface writer candidates) :: (IO.WInterface -> IO [Candidate])
-    candidates' <- IO.withWInterface pid stopsig action
-    return $ peepstate{psCandidates = candidates'}
+    let matchs = psMatchs peepstate
+    let action = (\winterface -> applyWriterHelper winterface writer matchs) :: (IO.WInterface -> IO [Match])
+    matchs' <- IO.withWInterface pid stopsig action
+    return $ peepstate{psMatchs = matchs'}

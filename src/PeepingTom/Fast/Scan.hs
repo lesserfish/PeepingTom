@@ -33,7 +33,7 @@ import Text.Printf
 foreign import capi safe "C/Scanner.c scan"
     c_scan ::
         FunPtr (Ptr CChar -> Ptr CChar -> CSize -> CUInt) -> -- Pointer to comparison function
-        StablePtr (MSeq a) -> -- Pointer to table of accepted candidates
+        StablePtr (MSeq a) -> -- Pointer to table of accepted matchs
         CUIntPtr -> -- Starting address of Memory chunk
         CUIntPtr -> -- Size of Memory Chunk
         Ptr CChar -> -- Pointer to Memory chunk data
@@ -41,27 +41,27 @@ foreign import capi safe "C/Scanner.c scan"
         CSize -> -- sizeof reference value
         IO ()
 
-appendMatch :: StablePtr (MSeq Candidate) -> CUIntPtr -> CUInt -> Ptr CChar -> CSize -> IO ()
-appendMatch tblPtr cAddr cMatch cDataPtr cDataSize = do
-    let types = decodeTypes cMatch (fromIntegral cDataSize)
-    let cslenData = (cDataPtr, fromIntegral cDataSize) :: CStringLen
+appendMatch :: StablePtr (MSeq Match) -> CUIntPtr -> CUInt -> Ptr CChar -> CSize -> IO ()
+appendMatch tblPtr cAddr cMatch mDataPtr mDataSize = do
+    let types = decodeTypes cMatch (fromIntegral mDataSize)
+    let cslenData = (mDataPtr, fromIntegral mDataSize) :: CStringLen
     bsData <- BS.packCStringLen cslenData
     let match =
-            Candidate
-                { cAddress = fromIntegral cAddr
-                , cData = bsData
-                , cTypes = types
-                , cRegionID = 0
+            Match
+                { mAddress = fromIntegral cAddr
+                , mData = bsData
+                , mTypes = types
+                , mRegionID = 0
                 }
 
     tbl <- deRefStablePtr tblPtr
     push tbl match
     return ()
 
-foreign export capi appendMatch :: StablePtr (MSeq Candidate) -> CUIntPtr -> CUInt -> Ptr CChar -> CSize -> IO ()
+foreign export capi appendMatch :: StablePtr (MSeq Match) -> CUIntPtr -> CUInt -> Ptr CChar -> CSize -> IO ()
 
 regionScanHelper ::
-    StablePtr (MSeq Candidate) -> -- Pointer to Candidate Table
+    StablePtr (MSeq Match) -> -- Pointer to Match Table
     Ptr CChar -> -- Pointer to Reference bytestring
     IO.RInterface -> -- Read Interface
     CFilter -> -- The Filter in question
@@ -90,9 +90,9 @@ regionScanHelper matchSeqPtr refPtr rInterface cFltr (startAddr, endAddr) chunkS
                     putStrLn $ printf "Failed to load chunk (%8x, %8x) of region." startAddr (startAddr + chunkSize)
                     return ()
 
-regionScan :: IO.RInterface -> CFilter -> Region -> Size -> IO [Candidate]
+regionScan :: IO.RInterface -> CFilter -> Region -> Size -> IO [Match]
 regionScan rInterface cFltr region chunkSize = do
-    matchSeq <- makeMSeq :: IO (MSeq Candidate)
+    matchSeq <- makeMSeq :: IO (MSeq Match)
     matchSeqPtr <- newStablePtr matchSeq
     let sa = rStartAddr region
     let ea = rEndAddr region
@@ -101,37 +101,37 @@ regionScan rInterface cFltr region chunkSize = do
 
     regionScanHelper matchSeqPtr refPtr rInterface cFltr (sa, ea) chunkSize
     matches' <- toList matchSeq
-    let candidates = map (\candidate -> candidate{cRegionID = regID}) matches'
-    return candidates
+    let matchs = map (\match -> match{mRegionID = regID}) matches'
+    return matchs
 
-regionScanLog :: Region -> [Candidate] -> IO ()
+regionScanLog :: Region -> [Match] -> IO ()
 regionScanLog reg result = do
-    if length result == 0 then return () else putStrLn $ printf "Extracted %4d candidates from Region %4d (size = %8x)" (length result) (rID reg) ((rEndAddr reg) - (rStartAddr reg))
+    if length result == 0 then return () else putStrLn $ printf "Extracted %4d matchs from Region %4d (size = %8x)" (length result) (rID reg) ((rEndAddr reg) - (rStartAddr reg))
 
-scanMapHelper :: SlowScan.ScanOptions -> CFilter -> MapInfo -> IO [Candidate]
+scanMapHelper :: SlowScan.ScanOptions -> CFilter -> MapInfo -> IO [Match]
 scanMapHelper scopt cFltr map = do
     let chunkSize = SlowScan.soChunkSize scopt
     let stopsig = SlowScan.soSIGSTOP scopt
     let pid = miPID map
     let regions = miRegions map
-    candidates <-
+    matchs <-
         IO.withRInterface
             pid
             stopsig
             ( \rinterface -> do
-                let action = vocal regionScanLog (\x -> regionScan rinterface cFltr x chunkSize) :: Region -> IO [Candidate]
-                fc <- forM regions action :: IO [[Candidate]]
+                let action = vocal regionScanLog (\x -> regionScan rinterface cFltr x chunkSize) :: Region -> IO [Match]
+                fc <- forM regions action :: IO [[Match]]
                 return $ concat fc
             )
-    return $ candidates
+    return $ matchs
 
 -- Public Methods:
 
 scanMapS :: SlowScan.ScanOptions -> CFilter -> MapInfo -> IO PeepState
 scanMapS scopt fltr map = do
     let pid = (miPID map)
-    candidates <- scanMapHelper scopt fltr map
-    return PeepState{psPID = pid, psCandidates = candidates, psRegions = map}
+    matchs <- scanMapHelper scopt fltr map
+    return PeepState{psPID = pid, psMatchs = matchs, psRegions = map}
 
 scanMap :: CFilter -> MapInfo -> IO PeepState
 scanMap = scanMapS SlowScan.defaultScanOptions

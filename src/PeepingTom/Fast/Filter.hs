@@ -112,14 +112,14 @@ maxSizeOf types = output
   where
     output = foldr max 0 (map sizeOf types)
 
-candidateFilter :: CFilter -> Candidate -> IO (Maybe Candidate)
-candidateFilter cFltr candidate = do
-    let bsData = cData candidate
+matchFilter :: CFilter -> Match -> IO (Maybe Match)
+matchFilter cFltr match = do
+    let bsData = mData match
     let bsPtr = getBSPtr bsData
     let ref = cfReference cFltr
     let refPtr = getBSPtr ref
     let funPtr = cfFPtr cFltr
-    let size = maxSizeOf (cTypes candidate)
+    let size = maxSizeOf (mTypes match)
     encodedTypes <- c_call funPtr bsPtr refPtr (fromIntegral size)
     let types = decodeTypes encodedTypes size
     if length types == 0
@@ -127,11 +127,11 @@ candidateFilter cFltr candidate = do
         else do
             let new_size = maxSizeOf types
             let newBS = BS.take new_size bsData
-            return $ Just candidate{cTypes = types, cData = newBS}
+            return $ Just match{mTypes = types, mData = newBS}
 
 applyFilter :: CFilter -> PeepState -> IO PeepState
 applyFilter fltr state = do
-    candidates' <- mapM (candidateFilter fltr) (psCandidates state) :: IO [Maybe Candidate]
-    let candidates = catMaybes candidates'
-    let output = state{psCandidates = candidates}
+    matchs' <- mapM (matchFilter fltr) (psMatchs state) :: IO [Maybe Match]
+    let matchs = catMaybes matchs'
+    let output = state{psMatchs = matchs}
     return output

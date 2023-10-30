@@ -5,10 +5,11 @@ module Main where
 
 import Foreign.C
 import qualified PeepingTom.Conversions as Conversions
-import qualified PeepingTom.Experimental.Fast.Filters as FastFilters
-import qualified PeepingTom.Experimental.Fast.State as FastState
-import qualified PeepingTom.Filters as Filters
-import qualified PeepingTom.Maps as Maps
+import qualified PeepingTom.Fast.Filter as FastFilter
+import qualified PeepingTom.Fast.Scan as FastScan
+import qualified PeepingTom.Filter as Filters
+import qualified PeepingTom.Map as Map
+import qualified PeepingTom.Scan as Scan
 import qualified PeepingTom.State as State
 import qualified PeepingTom.Type as Type
 import qualified PeepingTom.Writer as Writer
@@ -82,12 +83,12 @@ test1 = do
     status <-
         withProcess
             ( \pid -> do
-                all_maps <- Maps.getMapInfo pid
-                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
+                all_maps <- Map.extractRegions pid
+                let maps = Map.filterRegions (Map.defaultRFilter all_maps) all_maps
                 let fltr = Filters.eqIntX (False, False, False, True) 49
-                state <- State.scanMap fltr maps
+                state <- Scan.scanMap fltr maps
                 pause_process pid
-                let peeptom_matches = length . State.psCandidates $ state
+                let peeptom_matches = length . State.psMatchs $ state
                 scanmem_matches <- get_matches64 pid 49
                 putStrLn $ printf "Test:\n"
                 putStrLn $ printf "%d should be equal to %d" peeptom_matches scanmem_matches
@@ -106,12 +107,12 @@ test2 = do
     status <-
         withProcess
             ( \pid -> do
-                all_maps <- Maps.getMapInfo pid
-                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
+                all_maps <- Map.extractRegions pid
+                let maps = Map.filterRegions (Map.defaultRFilter all_maps) all_maps
                 let fltr = Filters.eqIntX (False, False, False, True) 49
-                state <- State.scanMap fltr maps
+                state <- Scan.scanMap fltr maps
                 putStrLn $ printf "Test:\n"
-                _ <- State.applyWriter (Writer.writeInt 3) state
+                _ <- Writer.applyWriter (Writer.writeInt 3) state
                 scanmem_matches <- get_matches64 pid 49
                 putStrLn $ printf "%d should be 0" scanmem_matches
                 putStrLn $ printf "%s" (if 0 == scanmem_matches then "Success!\n\n" else "Failure :c\n\n")
@@ -130,14 +131,14 @@ test3 = do
     status <-
         withProcess
             ( \pid -> do
-                all_maps <- Maps.getMapInfo pid
-                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
+                all_maps <- Map.extractRegions pid
+                let maps = Map.filterRegions (Map.defaultRFilter all_maps) all_maps
                 let fltr = Filters.eqIntX (False, False, False, True) 49
-                state <- State.scanMap fltr maps
+                state <- Scan.scanMap fltr maps
                 pause_process pid
                 update_values pid 49 0 (-1)
-                updated_state <- State.updateState state
-                let first_elem_value = State.cData ((State.psCandidates updated_state) !! 0)
+                updated_state <- Scan.updateState state
+                let first_elem_value = State.mData ((State.psMatchs updated_state) !! 0)
                 let cast = Conversions.i64FromBS first_elem_value
                 putStrLn $ printf "Test:\n"
                 putStrLn $ printf "%d should be 0" cast
@@ -155,12 +156,12 @@ test4 = do
     status <-
         withProcess
             ( \pid -> do
-                all_maps <- Maps.getMapInfo pid
-                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
+                all_maps <- Map.extractRegions pid
+                let maps = Map.filterRegions (Map.defaultRFilter all_maps) all_maps
                 let fltr = Filters.eqInt 49
-                state <- State.scanMap fltr maps
+                state <- Scan.scanMap fltr maps
                 pause_process pid
-                let peeptom_matches = length . State.psCandidates $ state
+                let peeptom_matches = length . State.psMatchs $ state
                 scanmem_matches <- get_matchesi pid 49
                 putStrLn $ printf "test:\n"
                 putStrLn $ printf "%d should be equal to %d" peeptom_matches scanmem_matches
@@ -178,12 +179,12 @@ test5 = do
     status <-
         withProcess
             ( \pid -> do
-                all_maps <- Maps.getMapInfo pid
-                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
-                let fltr = FastFilters.eqInt 49
-                state <- FastState.scanMap fltr maps
+                all_maps <- Map.extractRegions pid
+                let maps = Map.filterRegions (Map.defaultRFilter all_maps) all_maps
+                let fltr = FastFilter.eqInt 49
+                state <- FastScan.scanMap fltr maps
                 pause_process pid
-                let peeptom_matches = length . State.psCandidates $ state
+                let peeptom_matches = length . State.psMatchs $ state
                 scanmem_matches <- get_matchesi pid 49
                 putStrLn $ printf "test:\n"
                 putStrLn $ printf "%d should be equal to %d" peeptom_matches scanmem_matches
@@ -202,12 +203,12 @@ test6 = do
     status <-
         withProcess
             ( \pid -> do
-                all_maps <- Maps.getMapInfo pid
-                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
-                let fltr = FastFilters.i64Eq 49
-                state <- FastState.scanMap fltr maps
+                all_maps <- Map.extractRegions pid
+                let maps = Map.filterRegions (Map.defaultRFilter all_maps) all_maps
+                let fltr = FastFilter.i64Eq 49
+                state <- FastScan.scanMap fltr maps
                 pause_process pid
-                let peeptom_matches = length . State.psCandidates $ state
+                let peeptom_matches = length . State.psMatchs $ state
                 scanmem_matches <- get_matches64 pid 49
                 putStrLn $ printf "Test:\n"
                 putStrLn $ printf "%d should be equal to %d" peeptom_matches scanmem_matches
@@ -227,15 +228,15 @@ test7 = do
     status <-
         withProcess
             ( \pid -> do
-                all_maps <- Maps.getMapInfo pid
-                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
+                all_maps <- Map.extractRegions pid
+                let maps = Map.filterRegions (Map.defaultRFilter all_maps) all_maps
                 let fltr = Filters.eqIntX (False, False, False, True) 49
-                state <- State.scanMap fltr maps
+                state <- Scan.scanMap fltr maps
                 pause_process pid
                 update_values pid 49 0 20
-                updated_state <- State.updateState state
-                let filtered_state = State.applyFilter (Filters.eqInt 0) updated_state
-                let csize = length (State.psCandidates filtered_state)
+                updated_state <- Scan.updateState state
+                let filtered_state = Filters.applyFilter (Filters.eqInt 0) updated_state
+                let csize = length (State.psMatchs filtered_state)
                 putStrLn $ printf "Test:\n"
                 putStrLn $ printf "%d should be 20" csize
                 putStrLn $ printf "%s" (if csize == 20 then "Success!" else "Failure :c")
@@ -255,15 +256,15 @@ test8 = do
     status <-
         withProcess
             ( \pid -> do
-                all_maps <- Maps.getMapInfo pid
-                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
-                let fltr = FastFilters.i64Eq 49
-                state <- FastState.scanMap fltr maps
+                all_maps <- Map.extractRegions pid
+                let maps = Map.filterRegions (Map.defaultRFilter all_maps) all_maps
+                let fltr = FastFilter.i64Eq 49
+                state <- FastScan.scanMap fltr maps
                 pause_process pid
                 update_values pid 49 0 20
-                updated_state <- State.updateState state
-                filtered_state <- FastFilters.applyFilter (FastFilters.eqInt 0) updated_state
-                let csize = length (State.psCandidates filtered_state)
+                updated_state <- FastScan.updateState state
+                filtered_state <- FastFilter.applyFilter (FastFilter.eqInt 0) updated_state
+                let csize = length (State.psMatchs filtered_state)
                 putStrLn $ printf "Test:\n"
                 putStrLn $ printf "%d should be 20" csize
                 putStrLn $ printf "%s" (if csize == 20 then "Success!" else "Failure :c")
