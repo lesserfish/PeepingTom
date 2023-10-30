@@ -131,7 +131,7 @@ scanMapS :: SlowScan.ScanOptions -> CFilter -> MapInfo -> IO PeepState
 scanMapS scopt fltr map = do
     let pid = (miPID map)
     matchs <- scanMapHelper scopt fltr map
-    return PeepState{psPID = pid, psMatchs = matchs, psRegions = map}
+    return PeepState{psPID = pid, psMatches = matchs, psRegions = map}
 
 scanMap :: CFilter -> MapInfo -> IO PeepState
 scanMap = scanMapS SlowScan.defaultScanOptions

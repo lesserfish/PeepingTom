@@ -1,7 +1,7 @@
 #include <HsFFI.h>
 #include <stdio.h>
 #ifdef __GLASGOW_HASKELL__
-#include "PeepingTom/Experimental/Fast/State_stub.h"
+#include "PeepingTom/Fast/Scan_stub.h"
 #endif
 
 #ifndef __ChunkReader_C

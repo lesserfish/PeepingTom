@@ -131,7 +131,7 @@ matchFilter cFltr match = do
 
 applyFilter :: CFilter -> PeepState -> IO PeepState
 applyFilter fltr state = do
-    matchs' <- mapM (matchFilter fltr) (psMatchs state) :: IO [Maybe Match]
+    matchs' <- mapM (matchFilter fltr) (psMatches state) :: IO [Maybe Match]
     let matchs = catMaybes matchs'
-    let output = state{psMatchs = matchs}
+    let output = state{psMatches = matchs}
     return output

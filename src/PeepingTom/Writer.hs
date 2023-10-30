@@ -70,7 +70,7 @@ applyWriterS :: ScanOptions -> Writer -> PeepState -> IO PeepState
 applyWriterS scopt writer peepstate = do
     let stopsig = soSIGSTOP scopt
     let pid = psPID peepstate
-    let matchs = psMatchs peepstate
+    let matchs = psMatches peepstate
     let action = (\winterface -> applyWriterHelper winterface writer matchs) :: (IO.WInterface -> IO [Match])
     matchs' <- IO.withWInterface pid stopsig action
-    return $ peepstate{psMatchs = matchs'}
+    return $ peepstate{psMatches = matchs'}

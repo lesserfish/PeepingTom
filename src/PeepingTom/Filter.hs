@@ -38,8 +38,8 @@ type Filter = BS.ByteString -> [Type]
 applyFilter :: FilterInfo -> PeepState -> PeepState
 applyFilter fltr state = output
   where
-    matchs' = mapMaybe (matchFilter fltr) (psMatchs state)
-    output = state{psMatchs = matchs'}
+    matchs' = mapMaybe (matchFilter fltr) (psMatches state)
+    output = state{psMatches = matchs'}
 
 matchFilter :: FilterInfo -> Match -> Maybe Match
 matchFilter (fltr, _) match = output

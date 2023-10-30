@@ -25,7 +25,7 @@ data Match = Match
 
 data PeepState = PeepState
     { psPID :: PID
-    , psMatchs :: [Match]
+    , psMatches :: [Match]
     , psRegions :: MapInfo
     }
 
@@ -45,21 +45,21 @@ showState :: Int -> Int -> PeepState -> String
 showState maxmatchs' maxregions' ps =
     printf "PID: %d\n" (psPID ps)
         ++ printf "Regions (%d): \n\n%s\n%s\n" (length . miRegions . psRegions $ ps) rstr rdot
-        ++ printf "Matchs (%d): \n\n%s\n%s\n" (length . psMatchs $ ps) cstr cdot
+        ++ printf "Matches (%d): \n\n%s\n%s\n" (length . psMatches $ ps) cstr cdot
   where
-    maxmatchs = if maxmatchs' < 0 then (length . psMatchs $ ps) else maxmatchs'
+    maxmatchs = if maxmatchs' < 0 then (length . psMatches $ ps) else maxmatchs'
     maxregions = if maxregions' < 0 then (length . miRegions . psRegions $ ps) else maxregions'
-    match_list = take maxmatchs (psMatchs ps)
+    match_list = take maxmatchs (psMatches ps)
     cstrlist = fmap show match_list
     cstr = concat $ intersperse "\n" cstrlist
-    cdot = if (length . psMatchs $ ps) > maxmatchs then "...\n" else ""
+    cdot = if (length . psMatches $ ps) > maxmatchs then "...\n" else ""
     region_list = psRegions ps
     rstrlist = fmap show (take maxregions $ miRegions region_list)
     rstr = concat $ intersperse "\n" rstrlist
     rdot = if (length . miRegions $ region_list) > maxregions then "...\n" else ""
 
 matchCount :: PeepState -> Int
-matchCount = length . psMatchs
+matchCount = length . psMatches
 
 regionCount :: PeepState -> Int
 regionCount = length . miRegions . psRegions

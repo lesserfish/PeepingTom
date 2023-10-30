@@ -88,7 +88,7 @@ test1 = do
                 let fltr = Filters.eqIntX (False, False, False, True) 49
                 state <- Scan.scanMap fltr maps
                 pause_process pid
-                let peeptom_matches = length . State.psMatchs $ state
+                let peeptom_matches = length . State.psMatches $ state
                 scanmem_matches <- get_matches64 pid 49
                 putStrLn $ printf "Test:\n"
                 putStrLn $ printf "%d should be equal to %d" peeptom_matches scanmem_matches
@@ -138,7 +138,7 @@ test3 = do
                 pause_process pid
                 update_values pid 49 0 (-1)
                 updated_state <- Scan.updateState state
-                let first_elem_value = State.mData ((State.psMatchs updated_state) !! 0)
+                let first_elem_value = State.mData ((State.psMatches updated_state) !! 0)
                 let cast = Conversions.i64FromBS first_elem_value
                 putStrLn $ printf "Test:\n"
                 putStrLn $ printf "%d should be 0" cast
@@ -161,7 +161,7 @@ test4 = do
                 let fltr = Filters.eqInt 49
                 state <- Scan.scanMap fltr maps
                 pause_process pid
-                let peeptom_matches = length . State.psMatchs $ state
+                let peeptom_matches = length . State.psMatches $ state
                 scanmem_matches <- get_matchesi pid 49
                 putStrLn $ printf "test:\n"
                 putStrLn $ printf "%d should be equal to %d" peeptom_matches scanmem_matches
@@ -184,7 +184,7 @@ test5 = do
                 let fltr = FastFilter.eqInt 49
                 state <- FastScan.scanMap fltr maps
                 pause_process pid
-                let peeptom_matches = length . State.psMatchs $ state
+                let peeptom_matches = length . State.psMatches $ state
                 scanmem_matches <- get_matchesi pid 49
                 putStrLn $ printf "test:\n"
                 putStrLn $ printf "%d should be equal to %d" peeptom_matches scanmem_matches
@@ -208,7 +208,7 @@ test6 = do
                 let fltr = FastFilter.i64Eq 49
                 state <- FastScan.scanMap fltr maps
                 pause_process pid
-                let peeptom_matches = length . State.psMatchs $ state
+                let peeptom_matches = length . State.psMatches $ state
                 scanmem_matches <- get_matches64 pid 49
                 putStrLn $ printf "Test:\n"
                 putStrLn $ printf "%d should be equal to %d" peeptom_matches scanmem_matches
@@ -236,7 +236,7 @@ test7 = do
                 update_values pid 49 0 20
                 updated_state <- Scan.updateState state
                 let filtered_state = Filters.applyFilter (Filters.eqInt 0) updated_state
-                let csize = length (State.psMatchs filtered_state)
+                let csize = length (State.psMatches filtered_state)
                 putStrLn $ printf "Test:\n"
                 putStrLn $ printf "%d should be 20" csize
                 putStrLn $ printf "%s" (if csize == 20 then "Success!" else "Failure :c")
@@ -264,7 +264,7 @@ test8 = do
                 update_values pid 49 0 20
                 updated_state <- FastScan.updateState state
                 filtered_state <- FastFilter.applyFilter (FastFilter.eqInt 0) updated_state
-                let csize = length (State.psMatchs filtered_state)
+                let csize = length (State.psMatches filtered_state)
                 putStrLn $ printf "Test:\n"
                 putStrLn $ printf "%d should be 20" csize
                 putStrLn $ printf "%s" (if csize == 20 then "Success!" else "Failure :c")
