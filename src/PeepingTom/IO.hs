@@ -8,7 +8,6 @@ module PeepingTom.IO (
 
 import qualified Data.ByteString as BS
 import PeepingTom.Internal
-import qualified PeepingTom.Maps as Maps
 import qualified PeepingTom.Posix as Posix
 import Text.Printf (printf)
 

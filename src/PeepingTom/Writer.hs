@@ -5,12 +5,17 @@ module PeepingTom.Writer (
     writeBytes_,
     writeStr,
     writeStr_,
+    applyWriter,
+    applyWriterS,
 ) where
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
+import PeepingTom.Common
 import qualified PeepingTom.Conversions as Conversions
-import PeepingTom.Filters
+import qualified PeepingTom.IO as IO
+import PeepingTom.Scan
+import PeepingTom.State
 import PeepingTom.Type
 
 type Writer = Type -> BS.ByteString
@@ -41,3 +46,31 @@ writeStr str = writeBytes (BSC.pack str)
 
 writeStr_ :: String -> Writer
 writeStr_ str = writeBytes_ (BSC.pack str)
+
+writeMatch :: IO.WInterface -> Writer -> Match -> IO Match
+writeMatch winterface writer match = do
+    let addr = mAddress match
+    let maxtype = maxType . mTypes $ match -- Get the type with the largest size
+    let bs_data = writer maxtype -- Get the bytes to write
+    let data_size = BS.length bs_data
+    if data_size == 0
+        then return match -- Writer does not support this type; Don't write anything
+        else do
+            winterface addr bs_data
+            let match' = match{mData = bs_data}
+            return match'
+
+applyWriterHelper :: IO.WInterface -> Writer -> [Match] -> IO [Match]
+applyWriterHelper winterface writer matchs = sequence $ map (writeMatch winterface writer) matchs
+
+applyWriter :: Writer -> PeepState -> IO PeepState
+applyWriter = applyWriterS defaultScanOptions
+
+applyWriterS :: ScanOptions -> Writer -> PeepState -> IO PeepState
+applyWriterS scopt writer peepstate = do
+    let stopsig = soSIGSTOP scopt
+    let pid = psPID peepstate
+    let matchs = psMatches peepstate
+    let action = (\winterface -> applyWriterHelper winterface writer matchs) :: (IO.WInterface -> IO [Match])
+    matchs' <- IO.withWInterface pid stopsig action
+    return $ peepstate{psMatches = matchs'}

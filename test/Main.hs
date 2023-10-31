@@ -5,8 +5,11 @@ module Main where
 
 import Foreign.C
 import qualified PeepingTom.Conversions as Conversions
-import qualified PeepingTom.Filters as Filters
-import qualified PeepingTom.Maps as Maps
+import qualified PeepingTom.Fast.Filter as FastFilter
+import qualified PeepingTom.Fast.Scan as FastScan
+import qualified PeepingTom.Filter as Filters
+import qualified PeepingTom.Map as Map
+import qualified PeepingTom.Scan as Scan
 import qualified PeepingTom.State as State
 import qualified PeepingTom.Type as Type
 import qualified PeepingTom.Writer as Writer
@@ -24,7 +27,7 @@ foreign import capi safe "PeepingTom-test.h get_matches64"
     c_get_matches64 :: CInt -> CInt -> IO CULong
 
 foreign import capi safe "PeepingTom-test.h update_values"
-    c_update_values :: CInt -> CInt -> CInt -> IO ()
+    c_update_values :: CInt -> CInt -> CInt -> CInt -> IO ()
 
 foreign import capi safe "PeepingTom-test.h terminate_process"
     c_terminate_process :: CInt -> IO ()
@@ -53,8 +56,8 @@ get_matchesi pid value = do
     cvalue <- c_get_matchesi (fromIntegral pid) (fromIntegral value)
     return $ fromIntegral cvalue
 
-update_values :: Int -> Int -> Int -> IO ()
-update_values pid oldvalue newvalue = c_update_values (fromIntegral pid) (fromIntegral oldvalue) (fromIntegral newvalue)
+update_values :: Int -> Int -> Int -> Int -> IO ()
+update_values pid oldvalue newvalue section = c_update_values (fromIntegral pid) (fromIntegral oldvalue) (fromIntegral newvalue) (fromIntegral section)
 
 terminate_process :: Int -> IO ()
 terminate_process pid = do
@@ -71,17 +74,21 @@ withProcess action = do
     terminate_process pid
     return output
 
+-- 1. Generate child process
+-- 2. Search for Int64 with value 49 with PeepingTom
+-- 3. Search for Int64 with value 49 with ScanMem
+-- 4. Make sure we get the same amount of matches
 test1 :: IO Bool
 test1 = do
     status <-
         withProcess
             ( \pid -> do
-                all_maps <- Maps.getMapInfo pid
-                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
+                all_maps <- Map.extractRegions pid
+                let maps = Map.filterRegions (Map.defaultRFilter all_maps) all_maps
                 let fltr = Filters.eqIntX (False, False, False, True) 49
-                state <- State.scanMap fltr maps
+                state <- Scan.scanMap fltr maps
                 pause_process pid
-                let peeptom_matches = length . State.psCandidates $ state
+                let peeptom_matches = length . State.psMatches $ state
                 scanmem_matches <- get_matches64 pid 49
                 putStrLn $ printf "Test:\n"
                 putStrLn $ printf "%d should be equal to %d" peeptom_matches scanmem_matches
@@ -90,17 +97,22 @@ test1 = do
             )
     return status
 
+-- 1. Generate child process
+-- 2. Search for Int64 with value 49 with PeepingTom
+-- 3. Write 3 to all addresses
+-- 3. Search for Int64 with value 49 with ScanMem
+-- 4. Make sure we get 0 matches
 test2 :: IO Bool
 test2 = do
     status <-
         withProcess
             ( \pid -> do
-                all_maps <- Maps.getMapInfo pid
-                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
+                all_maps <- Map.extractRegions pid
+                let maps = Map.filterRegions (Map.defaultRFilter all_maps) all_maps
                 let fltr = Filters.eqIntX (False, False, False, True) 49
-                state <- State.scanMap fltr maps
+                state <- Scan.scanMap fltr maps
                 putStrLn $ printf "Test:\n"
-                _ <- State.applyWriter (Writer.writeInt 3) state
+                _ <- Writer.applyWriter (Writer.writeInt 3) state
                 scanmem_matches <- get_matches64 pid 49
                 putStrLn $ printf "%d should be 0" scanmem_matches
                 putStrLn $ printf "%s" (if 0 == scanmem_matches then "Success!\n\n" else "Failure :c\n\n")
@@ -108,19 +120,25 @@ test2 = do
             )
     return status
 
+-- 1. Generate child process
+-- 2. Search for Int64 with value 49 with PeepingTom
+-- 3. Use ScanMem to set all Int64 with values equal to 49 to 9
+-- 3. Update the results with PeepingTom
+-- 4. Check the first element to see if it's bytestring is actually 0
+
 test3 :: IO Bool
 test3 = do
     status <-
         withProcess
             ( \pid -> do
-                all_maps <- Maps.getMapInfo pid
-                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
+                all_maps <- Map.extractRegions pid
+                let maps = Map.filterRegions (Map.defaultRFilter all_maps) all_maps
                 let fltr = Filters.eqIntX (False, False, False, True) 49
-                state <- State.scanMap fltr maps
+                state <- Scan.scanMap fltr maps
                 pause_process pid
-                update_values pid 49 0
-                updated_state <- State.updateState state
-                let first_elem_value = State.cData ((State.psCandidates updated_state) !! 0)
+                update_values pid 49 0 (-1)
+                updated_state <- Scan.updateState state
+                let first_elem_value = State.mData ((State.psMatches updated_state) !! 0)
                 let cast = Conversions.i64FromBS first_elem_value
                 putStrLn $ printf "Test:\n"
                 putStrLn $ printf "%d should be 0" cast
@@ -129,22 +147,128 @@ test3 = do
             )
     return status
 
+-- 1. Generate child process
+-- 2. Search for Int with value 49 with PeepingTom
+-- 3. Search for Int with value 49 with ScanMem
+-- 4. Make sure we get the same amount of matches
 test4 :: IO Bool
 test4 = do
     status <-
         withProcess
             ( \pid -> do
-                all_maps <- Maps.getMapInfo pid
-                let maps = Maps.filterMap (Maps.defaultFilter all_maps) all_maps
+                all_maps <- Map.extractRegions pid
+                let maps = Map.filterRegions (Map.defaultRFilter all_maps) all_maps
                 let fltr = Filters.eqInt 49
-                state <- State.scanMap fltr maps
+                state <- Scan.scanMap fltr maps
                 pause_process pid
-                let peeptom_matches = length . State.psCandidates $ state
+                let peeptom_matches = length . State.psMatches $ state
                 scanmem_matches <- get_matchesi pid 49
                 putStrLn $ printf "test:\n"
                 putStrLn $ printf "%d should be equal to %d" peeptom_matches scanmem_matches
                 putStrLn $ printf "%s" (if peeptom_matches == scanmem_matches then "Success!\n\n" else "Failure :c\n\n")
                 return $ peeptom_matches == scanmem_matches
+            )
+    return status
+
+-- 1. Generate child process
+-- 2. Search for Int with value 49 with PeepingTom.Fast
+-- 3. Search for Int with value 49 with ScanMem
+-- 4. Make sure we get the same amount of matches
+test5 :: IO Bool
+test5 = do
+    status <-
+        withProcess
+            ( \pid -> do
+                all_maps <- Map.extractRegions pid
+                let maps = Map.filterRegions (Map.defaultRFilter all_maps) all_maps
+                let fltr = FastFilter.eqInt 49
+                state <- FastScan.scanMap fltr maps
+                pause_process pid
+                let peeptom_matches = length . State.psMatches $ state
+                scanmem_matches <- get_matchesi pid 49
+                putStrLn $ printf "test:\n"
+                putStrLn $ printf "%d should be equal to %d" peeptom_matches scanmem_matches
+                putStrLn $ printf "%s" (if peeptom_matches == scanmem_matches then "Success!\n\n" else "Failure :c\n\n")
+                return $ peeptom_matches == scanmem_matches
+            )
+    return status
+
+--
+-- 1. Generate child process
+-- 2. Search for Int64 with value 49 with PeepingTom.Fast
+-- 3. Search for Int64 with value 49 with ScanMem
+-- 4. Make sure we get the same amount of matches
+test6 :: IO Bool
+test6 = do
+    status <-
+        withProcess
+            ( \pid -> do
+                all_maps <- Map.extractRegions pid
+                let maps = Map.filterRegions (Map.defaultRFilter all_maps) all_maps
+                let fltr = FastFilter.i64Eq 49
+                state <- FastScan.scanMap fltr maps
+                pause_process pid
+                let peeptom_matches = length . State.psMatches $ state
+                scanmem_matches <- get_matches64 pid 49
+                putStrLn $ printf "Test:\n"
+                putStrLn $ printf "%d should be equal to %d" peeptom_matches scanmem_matches
+                putStrLn $ printf "%s" (if peeptom_matches == scanmem_matches then "Success!\n\n" else "Failure :c\n\n")
+                return $ peeptom_matches == scanmem_matches
+            )
+    return status
+
+-- 1. Generate child process
+-- 2. Search for Int64 with value 49 with PeepingTom
+-- 3. Use ScanMem to set the first 20 Int64 with values equal to 49 to 9
+-- 3. Update the results with PeepingTom
+-- 4. Filter the result using == 9
+-- 4. Check that we have 20 results
+test7 :: IO Bool
+test7 = do
+    status <-
+        withProcess
+            ( \pid -> do
+                all_maps <- Map.extractRegions pid
+                let maps = Map.filterRegions (Map.defaultRFilter all_maps) all_maps
+                let fltr = Filters.eqIntX (False, False, False, True) 49
+                state <- Scan.scanMap fltr maps
+                pause_process pid
+                update_values pid 49 0 20
+                updated_state <- Scan.updateState state
+                let filtered_state = Filters.applyFilter (Filters.eqInt 0) updated_state
+                let csize = length (State.psMatches filtered_state)
+                putStrLn $ printf "Test:\n"
+                putStrLn $ printf "%d should be 20" csize
+                putStrLn $ printf "%s" (if csize == 20 then "Success!" else "Failure :c")
+                return $ csize == 20
+            )
+    return status
+
+--
+-- 1. Generate child process
+-- 2. Search for Int64 with value 49 with PeepingTom
+-- 3. Use ScanMem to set the first 20 Int64 with values equal to 49 to 9
+-- 3. Update the results with PeepingTom
+-- 4. Filter the result using == 9 using Fast.Filters
+-- 4. Check that we have 20 results
+test8 :: IO Bool
+test8 = do
+    status <-
+        withProcess
+            ( \pid -> do
+                all_maps <- Map.extractRegions pid
+                let maps = Map.filterRegions (Map.defaultRFilter all_maps) all_maps
+                let fltr = FastFilter.i64Eq 49
+                state <- FastScan.scanMap fltr maps
+                pause_process pid
+                update_values pid 49 0 20
+                updated_state <- FastScan.updateState state
+                filtered_state <- FastFilter.applyFilter (FastFilter.eqInt 0) updated_state
+                let csize = length (State.psMatches filtered_state)
+                putStrLn $ printf "Test:\n"
+                putStrLn $ printf "%d should be 20" csize
+                putStrLn $ printf "%s" (if csize == 20 then "Success!" else "Failure :c")
+                return $ csize == 20
             )
     return status
 
@@ -161,6 +285,18 @@ test 3 = do
 test 4 = do
     ok <- test4
     if ok then return () else exitWith (ExitFailure 1)
+test 5 = do
+    ok <- test5
+    if ok then return () else exitWith (ExitFailure 1)
+test 6 = do
+    ok <- test6
+    if ok then return () else exitWith (ExitFailure 1)
+test 7 = do
+    ok <- test7
+    if ok then return () else exitWith (ExitFailure 1)
+test 8 = do
+    ok <- test8
+    if ok then return () else exitWith (ExitFailure 1)
 test _ = return ()
 
 testall :: IO ()
@@ -169,6 +305,10 @@ testall = do
     test 2
     test 3
     test 4
+    test 5
+    test 6
+    test 7
+    test 8
 
 main :: IO ()
 main = do

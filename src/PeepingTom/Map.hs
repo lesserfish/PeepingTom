@@ -1,21 +1,15 @@
-module PeepingTom.Maps (
-    R (..),
-    W (..),
-    X (..),
-    S (..),
+module PeepingTom.Map (
     Permission (..),
-    Address,
     MapID (..),
     Region (..),
     MapInfo (..),
-    getMapInfo,
-    filterMap,
-    filterRW,
-    filterR,
-    filterW,
-    filterAll,
-    filterMappings,
-    defaultFilter,
+    extractRegions,
+    filterRegions,
+    rFilterRW,
+    rFilterR,
+    rFilterW,
+    rFilterMappings,
+    defaultRFilter,
     totalBytes,
 ) where
 
@@ -26,11 +20,7 @@ import qualified PeepingTom.Posix as Posix
 import qualified System.IO as IO
 import Text.Printf (printf)
 
-data R = R | NR deriving (Show)
-data W = W | NW deriving (Show)
-data X = X | NX deriving (Show)
-data S = S | P deriving (Show)
-data Permission = Permission {r :: R, w :: W, x :: X, s :: S}
+data Permission = Permission {r :: Bool, w :: Bool, x :: Bool, s :: Bool}
 data MapID = MapID {majorID :: Int, minorID :: Int, inodeID :: Int}
 data Region = Region {rStartAddr :: Address, rEndAddr :: Address, rPermission :: Permission, rOffset :: Address, rMapID :: MapID, rFP :: FilePath, rID :: Int, rPID :: PID}
 data MapInfo = MapInfo {miRegions :: [Region], miPID :: PID, miExecutableName :: String}
@@ -42,18 +32,11 @@ showRegions (y : ys) = show y ++ "\n" ++ (showRegions ys)
 instance Show Permission where
     show p = sr ++ sw ++ sx ++ ss
       where
-        sr = case (r p) of
-            R -> "r"
-            NR -> "-"
-        sw = case (w p) of
-            W -> "w"
-            NW -> "-"
-        sx = case (x p) of
-            X -> "x"
-            NX -> "-"
-        ss = case (s p) of
-            S -> "s"
-            P -> "p"
+        sr = if (r p) then "r" else "-"
+        sw = if (w p) then "w" else "-"
+        sx = if (x p) then "x" else "-"
+        ss = if (s p) then "s" else "x"
+
 instance Show MapID where
     show m = (printf "%02x" (majorID m)) ++ ":" ++ (printf "%02x" (minorID m)) ++ " " ++ show (inodeID m)
 instance Show Region where
@@ -115,10 +98,10 @@ getAddr str
 getPermission :: String -> Permission
 getPermission str = perm
   where
-    rp = if (str !! 0) == 'r' then R else NR
-    wp = if (str !! 1) == 'w' then W else NW
-    xp = if (str !! 2) == 'x' then X else NX
-    sp = if (str !! 3) == 'p' then P else S
+    rp = (str !! 0) == 'r'
+    wp = (str !! 1) == 'w'
+    xp = (str !! 2) == 'x'
+    sp = (str !! 3) == 'p'
     perm = Permission rp wp xp sp
 
 -- Offset is simply written as a hex number
@@ -183,8 +166,8 @@ getExecName pid = do
     execname <- Posix.readlink (exeFile pid)
     return execname
 
-getMapInfo :: PID -> IO MapInfo
-getMapInfo pid = do
+extractRegions :: PID -> IO MapInfo
+extractRegions pid = do
     reg <- getRegions pid
     execname <- getExecName pid
     let info = MapInfo reg pid execname
@@ -202,47 +185,37 @@ totalBytes mapinfo = totalBytes' (miRegions mapinfo)
 
 -- Filters for [Region]
 
-filterMap :: (Region -> Bool) -> MapInfo -> MapInfo
-filterMap f maps = maps{miRegions = filtered_miRegions}
+filterRegions :: (Region -> Bool) -> MapInfo -> MapInfo
+filterRegions f maps = maps{miRegions = rFiltered_miRegions}
   where
-    filtered_miRegions = filter f (miRegions maps)
+    rFiltered_miRegions = filter f (miRegions maps)
 
-filterRW :: Region -> Bool
-filterRW region = readP && writeP
+rFilterRW :: Region -> Bool
+rFilterRW region = readP && writeP
   where
-    readP = case (r (rPermission region)) of
-        R -> True
-        NR -> False
-    writeP = case (w (rPermission region)) of
-        W -> True
-        NW -> False
+    readP = (r (rPermission region))
+    writeP = (w (rPermission region))
 
-filterR :: Region -> Bool
-filterR region = readP
+rFilterR :: Region -> Bool
+rFilterR region = readP
   where
-    readP = case (r (rPermission region)) of
-        R -> True
-        NR -> False
+    readP = (r (rPermission region))
 
-filterW :: Region -> Bool
-filterW region = writeP
+rFilterW :: Region -> Bool
+rFilterW region = writeP
   where
-    writeP = case (w (rPermission region)) of
-        W -> True
-        NW -> False
-filterAll :: Region -> Bool
-filterAll _ = True
+    writeP = (w (rPermission region))
 
-filterMappings :: String -> Region -> Bool
-filterMappings execname region = not_mapping || not_exec
+rFilterMappings :: String -> Region -> Bool
+rFilterMappings execname region = not_mapping || not_exec
   where
     not_mapping = ((inodeID . rMapID) $ region) == 0
     not_exec = (rFP region == execname)
 
-defaultFilter :: MapInfo -> (Region -> Bool)
-defaultFilter mapinfo = func
+defaultRFilter :: MapInfo -> (Region -> Bool)
+defaultRFilter mapinfo = func
   where
     func reg = rwf && maf
       where
-        rwf = filterRW reg
-        maf = filterMappings (miExecutableName mapinfo) reg
+        rwf = rFilterRW reg
+        maf = rFilterMappings (miExecutableName mapinfo) reg
