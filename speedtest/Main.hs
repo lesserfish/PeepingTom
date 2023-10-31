@@ -71,7 +71,7 @@ run_peeptom_fast pid value = do
     all_maps <- Maps.extractRegions pid
     let maps = Maps.filterRegions (Maps.defaultRFilter all_maps) all_maps
     let fltr = Filters.eqInt value
-    state <- Fast.scanMap (FastFilter.i32Eq value) maps
+    state <- Fast.scanMap (FastFilter.i32Eq (fromIntegral value)) maps
     return ()
 
 main :: IO ()
