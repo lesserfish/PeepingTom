@@ -92,9 +92,6 @@ Typing help will give you a list of available commands
     	 $ [filter] [value]:          Scans the memory or update the candidates, and extracts those that satisfy the filter. 
     	 set [option] [args]:         Sets various options regarding the scan. Type 'help set' to see more.
     	 list [object]:               Lists several objects. To see a list of available objects type 'help list'.
-    	 delete [object]:             Deletes an object. To see a list of objects that can be deleted type 'help delete'.
-    	 filter map [filter]:         Filters the list of virtual memory regions. To see a list of available filters type 'list rfilter'.
-    	 filter candidate [filter]:   Filters the list of candidates. To see a list of available filters type 'list filter'.
     	 update:                      Update the values of the current candidates.
     	 save [name]:                 Save the current list of candidates.
     	 load [name]:                 Loads a list of candidates.
@@ -197,13 +194,9 @@ The following scan will then be equivalent to a initial scan. To see a list of s
 
 You can set the type of interest by running
 
-    > set type int64 int16 int 8
+    > set type type
 
-This will affect all numeric scans, but will not affect literal scans, i.e. Scans of strings,
-
-    > $ == "A sequence of bytes"
-
-will still work regardless of what type was set with 'set type'
+The following are valid types: 'int8', 'int16', 'int32', 'int64', 'int' (of all widths), and 'string'.
 
 PeepingTom scans the regions of virtual memory by reading chunks of memory, and then filtering the addresses in each chunk before loading the next chunk. You can set the size of chunks being loaded by running
 
@@ -265,7 +258,13 @@ The default filter matches the default filter of scanmem.
 
 ### Initial scan:
 
-We are interested in extracting the addresses in virtual memory that satisfy a specific filter. For this, you need to create a FilterInfo
+We are interested in extracting the addresses in virtual memory that satisfy a specific filter. 
+
+There are two ways of doing this:
+
+#### Standard Mode:
+
+For this, you need to create a FilterInfo
 
 These are defined as
     
@@ -344,6 +343,30 @@ The result is an object PeepState, defined as:
     , psRegions :: Maps.MapInfo
     }
 
+#### Fast Mode:
+
+Scanning through the entire virtual memory of a process can take a lot of time if the processing is done in Haskell. You can use PeepingTom.Fast.Scan and PeepingTom.Fast.Filter to scan through the regions of memory using C instead.
+
+PeepingTom.Fast.Scan exports the same functions as PeepingTom.Scan, in specific, it exports:
+
+    scanMap :: CFilter -> Maps.MapInfo -> IO PeepState
+
+where CFilter is a Filter that C can use. It is defined as
+
+    
+    data CFilter = CFilter
+        { cfFPtr :: FunPtr (Ptr CChar -> Ptr CChar -> CSize -> CUInt)
+        , cfMaxSize :: Int
+        , cfReference :: BS.ByteString
+        }
+
+Fast.Scan tends to be 5-7x faster than regular Scan, and is only about 3x slower than ScanMem. The disadvantage of Fast.Scan is that writing CFilters is harder than writing regular Filters.
+
+PeepingTom.Fast.Filters export filters for equality and comparison of integral types (int8, int16, int32, int64 and ints of all widths), as well as equality of bytestrings.
+
+Unless you are interested in searching the virtual memory for very specific values, like primes of the form x**2 + n y**2, then you should opt to use fast mode.
+
+
 ### Refining the search
 
 If you are interested in refining your search, you need to
@@ -359,6 +382,8 @@ Once you have updated your values, you can simply re-run your filter
 
     let fltr = Filters.eqInt 33
     let fstate = applyFilter fltr state'
+
+You can also apply CFilters using PeepingTom.Fast.Filters.applyFilter
 
 ### Setting values
 
