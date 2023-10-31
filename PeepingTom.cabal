@@ -9,8 +9,8 @@ category: System
 build-type: Simple
 extra-doc-files: CHANGELOG.md
 extra-source-files: src/PeepingTom/helper.h, 
-                    src/PeepingTom/Experimental/Fast/C/Filters.c,
-                    src/PeepingTom/Experimental/Fast/C/Scanner.c, 
+                    src/PeepingTom/Fast/C/Filters.c,
+                    src/PeepingTom/Fast/C/Scanner.c, 
 
 
 common warnings
@@ -18,20 +18,23 @@ common warnings
   -Wall
 
 library PeepingTom-lib
-  exposed-modules:  PeepingTom.Maps, 
+  exposed-modules:  PeepingTom,
+                    PeepingTom.Fast,
+                    PeepingTom.Map, 
                     PeepingTom.Posix, 
                     PeepingTom.Type, 
                     PeepingTom.State, 
+                    PeepingTom.Scan, 
                     PeepingTom.IO, 
-                    PeepingTom.Filters, 
+                    PeepingTom.Filter, 
                     PeepingTom.Internal, 
+                    PeepingTom.Common, 
                     PeepingTom.Conversions, 
                     PeepingTom.Writer, 
-                    PeepingTom.Experimental.PT, 
-                    PeepingTom.Experimental.Fast.State,
-                    PeepingTom.Experimental.Fast.Filters,
-                    PeepingTom.Experimental.Fast.MSeq,
-                    PeepingTom.Experimental.Fast.Common,
+                    PeepingTom.Fast.Scan,
+                    PeepingTom.Fast.Filter,
+                    PeepingTom.Fast.MSeq,
+                    PeepingTom.Fast.Common,
   build-depends:    base >= 4.18.0.0,
                     bytestring >= 0.11.4.0,
                     split >= 0.2.3.5,
@@ -98,7 +101,6 @@ executable PeepingTom
         Commands.Selection.Neq,
         Commands.Set,
         Commands.Update,
-        Commands.Demo
   build-depends: base >= 4.18.0.0, 
                  PeepingTom-lib,
                  haskeline >= 0.8.2.1,

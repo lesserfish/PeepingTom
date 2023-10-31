@@ -2,8 +2,11 @@ module Commands.Selection.Helper where
 
 import Control.Exception
 import qualified Data.Map as Map
-import qualified PeepingTom.Filters as PTFilter
-import qualified PeepingTom.Maps as PTMap
+import qualified PeepingTom.Fast.Filter as PTFastFilter
+import qualified PeepingTom.Fast.Scan as PTFastScan
+import qualified PeepingTom.Filter as PTFilter
+import qualified PeepingTom.Map as PTMap
+import qualified PeepingTom.Scan as PTScan
 import qualified PeepingTom.State as PTState
 import qualified PeepingTom.Type as PTType
 import State
@@ -51,9 +54,9 @@ parseVA input
     | otherwise = VAInvalid
 
 filterMap :: RFilter -> PTMap.MapInfo -> PTMap.MapInfo
-filterMap RFDefault map = PTMap.filterMap (PTMap.defaultFilter map) map
-filterMap RFReadPerm map = PTMap.filterMap (PTMap.filterR) map
-filterMap RFWritePerm map = PTMap.filterMap (PTMap.filterW) map
+filterMap RFDefault map = PTMap.filterRegions (PTMap.defaultRFilter map) map
+filterMap RFReadPerm map = PTMap.filterRegions (PTMap.rFilterR) map
+filterMap RFWritePerm map = PTMap.filterRegions (PTMap.rFilterW) map
 filterMap RFAll map = map
 
 scanNew :: PTFilter.FilterInfo -> State -> IO State
@@ -61,50 +64,71 @@ scanNew fltr state = do
     let types = (oScanTypes . sOptions $ state)
     let stopsig = (oSendStopSig . sOptions $ state)
     let chunk_size = (oChunkSize . sOptions $ state)
-    let options = PTState.ScanOptions chunk_size stopsig
+    let options = PTScan.ScanOptions chunk_size stopsig
     let pid = sPID state
     let stateName = sCurrentState state
-    all_maps <- PTMap.getMapInfo pid
+    all_maps <- PTMap.extractRegions pid
     let maps = filterMap (oRFilter . sOptions $ state) all_maps
-    ptstate <- PTState.scanMapS options fltr maps
+    ptstate <- PTScan.scanMapS options fltr maps
     putStrLn $ PTState.showState 5 5 ptstate
     let newmap = Map.insert stateName ptstate (sStates state) :: PTMap
     let newstate = state{sStates = newmap}
     return newstate
 
-scanAction' :: PTFilter.FilterInfo -> State -> IO State
-scanAction' fltr state = do
+scanNewFast :: PTFastFilter.CFilter -> State -> IO State
+scanNewFast fltr state = do
+    let types = (oScanTypes . sOptions $ state)
+    let stopsig = (oSendStopSig . sOptions $ state)
+    let chunk_size = (oChunkSize . sOptions $ state)
+    let options = PTScan.ScanOptions chunk_size stopsig
+    let pid = sPID state
+    let stateName = sCurrentState state
+    all_maps <- PTMap.extractRegions pid
+    let maps = filterMap (oRFilter . sOptions $ state) all_maps
+    ptstate <- PTFastScan.scanMapS options fltr maps
+    putStrLn $ PTState.showState 5 5 ptstate
+    let newmap = Map.insert stateName ptstate (sStates state) :: PTMap
+    let newstate = state{sStates = newmap}
+    return newstate
+
+updateScan :: PTFilter.FilterInfo -> PTState.PeepState -> State -> IO State
+updateScan fltr ptState state = do
     let stateName = sCurrentState (state) :: String
-    let maybePTState = Map.lookup stateName (sStates state) :: Maybe PTState.PeepState
-    case maybePTState of
-        Nothing -> scanNew fltr state
-        Just ptState -> do
-            let stopsig = (oSendStopSig . sOptions $ state)
-            let chunk_size = (oChunkSize . sOptions $ state)
-            let options = PTState.ScanOptions chunk_size stopsig
+    let stopsig = (oSendStopSig . sOptions $ state)
+    let chunk_size = (oChunkSize . sOptions $ state)
+    let options = PTScan.ScanOptions chunk_size stopsig
 
-            ptUpdated <- PTState.updateStateS options ptState
-            let ptFiltered = PTState.applyFilter fltr ptUpdated
-            putStrLn $ PTState.showState 5 5 ptFiltered
-            let newmap = Map.adjust (\_ -> ptFiltered) stateName (sStates state) :: PTMap
-            let new_state = state{sStates = newmap}
-            return new_state
+    ptUpdated <- PTScan.updateStateS options ptState
+    let ptFiltered = PTFilter.applyFilter fltr ptUpdated
+    putStrLn $ PTState.showState 5 5 ptFiltered
+    let newmap = Map.adjust (\_ -> ptFiltered) stateName (sStates state) :: PTMap
+    let new_state = state{sStates = newmap}
+    return new_state
 
-scanAction :: PTFilter.FilterInfo -> State -> IO State
+scanAction' :: (PTFilter.FilterInfo, PTFastFilter.CFilter) -> State -> IO State
+scanAction' (fltr, cfltr) state = do
+    let fastmode = oFastMode . sOptions $ state
+    if fastmode
+        then do
+            let stateName = sCurrentState (state) :: String
+            let maybePTState = Map.lookup stateName (sStates state) :: Maybe PTState.PeepState
+            case maybePTState of
+                Nothing -> scanNewFast cfltr state
+                Just ptState -> updateScan fltr ptState state -- So far, there is no updateScanFast
+        else do
+            let stateName = sCurrentState (state) :: String
+            let maybePTState = Map.lookup stateName (sStates state) :: Maybe PTState.PeepState
+            case maybePTState of
+                Nothing -> scanNew fltr state
+                Just ptState -> updateScan fltr ptState state
+
+scanAction :: (PTFilter.FilterInfo, PTFastFilter.CFilter) -> State -> IO State
 scanAction fltr state = catch (scanAction' fltr state) handler
   where
     handler :: SomeException -> IO State
     handler e = do
         putStrLn $ printf "Exception thrown :(\n\nException: %s\n\n" (show e)
         return state
-
-getTypes :: [PTType.Type] -> (Bool, Bool, Bool, Bool)
-getTypes types = (i8, i16, i32, i64)
-  where
-    i8 = elem (PTType.Int8) types
-    i16 = elem (PTType.Int16) types
-    i32 = elem (PTType.Int32) types
-    i64 = elem (PTType.Int64) types
 
 cmdHelp :: String
 cmdHelp = "\n$: Extract candidates from regions of virtual memory.\n\nUsage:\n\n\t$ [Comparison] [Argument]\n\nExamples:\n\n\t$ == 3\n\t$ <= 9\n\t$ > 127\n\n"
