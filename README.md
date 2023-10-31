@@ -89,14 +89,14 @@ Typing help will give you a list of available commands
     
     The following commands are available: 
     	 pid:                         Sets the PID of the process to be scanned by PeepingTom. 
-    	 $ [filter] [value]:          Scans the memory or update the candidates, and extracts those that satisfy the filter. 
+    	 $ [filter] [value]:          Scans the memory or update the matches, and extracts those that satisfy the filter. 
     	 set [option] [args]:         Sets various options regarding the scan. Type 'help set' to see more.
     	 list [object]:               Lists several objects. To see a list of available objects type 'help list'.
-    	 update:                      Update the values of the current candidates.
-    	 save [name]:                 Save the current list of candidates.
-    	 load [name]:                 Loads a list of candidates.
-    	 new [name]:                  Creates a new list of candidates.
-    	 reset:                       Resets the current list of candidates.
+    	 update:                      Update the values of the current matches.
+    	 save [name]:                 Save the current list of matches.
+    	 load [name]:                 Loads a list of matches.
+    	 new [name]:                  Creates a new list of matches.
+    	 reset:                       Resets the current list of matches.
 
 You can set the PID of the process you want to scan by running
 
@@ -108,9 +108,12 @@ All scans require a filter, a list of available filters can be seen by using
 
     > help $
 
-For example, in order to extract all memory addresses that contain the integer value 27, you would
+For example, the following line extract the addresses in memory that contain the value 27:
 
     > $ == 27
+
+The following line extracts the addresses in memory that contain the string "Continue" (without EOL):
+
     > $ == "Continue"
 
 The initial scan can take some time, depending on the quantity of regions of interest.
@@ -125,23 +128,23 @@ Future scans can be done similarly, by simply running
 
     > $ == 23
 
-Future scans will usually be a lot faster, depending on how many candidates were extracted in the initial scan.
+Future scans will usually be a lot faster, depending on how many matches were extracted in the initial scan.
 
-To list the available candidates you can run:
+To list the available matches you can run:
 
     > list state
 
-This will show you up to 5 regions and up to 5 candidates. You can specify the number of candidates / regions by adding arguments to 'list state'
+This will show you up to 5 regions and up to 5 matches. You can specify the number of matches / regions by adding arguments to 'list state'
 
     > list state 10 2
 
-This will list 10 candidates and 2 regions. By passing -1 as an argument, you can print all of the candidates. 
+This will list 10 matches and 2 regions. By passing -1 as an argument, you can print all of the matches. 
 
-You can update the value of the candidates by running
+You can update the value of the matches by running
 
     > update
 
-This will read the virtual memory, and update the values of each candidates. It will then print the results.
+This will read the virtual memory, and update the values of each matches. It will then print the results.
 
 ### Setting values
 
@@ -155,7 +158,7 @@ Alternative, you can write a string by using StrSet
 
     > StrSet "This text will go to the memory"
 
-This will iterate over all of the candidates, and set the memory value to the corresponding value, taking into consideration the length of the memory address, i.e. It will consider whether the address holds an Int8 or an Int32. 
+This will iterate over all of the matches, and set the memory value to the corresponding value, taking into consideration the length of the memory address, i.e. It will consider whether the address holds an Int8 or an Int32. 
 
 ### Multiple searches
 
@@ -339,7 +342,7 @@ The result is an object PeepState, defined as:
 
     data PeepState = PeepState
     { psPID :: PID
-    , psCandidates :: [Candidate]
+    , psMatches :: [Matches]
     , psRegions :: Maps.MapInfo
     }
 
