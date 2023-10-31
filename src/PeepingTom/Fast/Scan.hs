@@ -44,7 +44,8 @@ foreign import capi safe "C/Scanner.c scan"
 appendMatch :: StablePtr (MSeq Match) -> CUIntPtr -> CUInt -> Ptr CChar -> CSize -> IO ()
 appendMatch tblPtr cAddr cMatch mDataPtr mDataSize = do
     let types = decodeTypes cMatch (fromIntegral mDataSize)
-    let cslenData = (mDataPtr, fromIntegral mDataSize) :: CStringLen
+    let realDataSize = maxSizeOf types
+    let cslenData = (mDataPtr, fromIntegral realDataSize) :: CStringLen
     bsData <- BS.packCStringLen cslenData
     let match =
             Match
