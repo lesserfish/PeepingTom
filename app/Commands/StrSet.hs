@@ -3,6 +3,7 @@ module Commands.StrSet (strSetCommand) where
 import Commands.Base
 import Commands.Selection.Helper
 import qualified Data.Map as Map
+import qualified PeepingTom.Scan as PTScan
 import qualified PeepingTom.State as PTState
 import qualified PeepingTom.Writer as PTWriter
 import State
@@ -22,8 +23,8 @@ strSetAction args state = do
                 Just ptstate -> do
                     let stopsig = (oSendStopSig . sOptions $ state)
                     let chunk_size = (oChunkSize . sOptions $ state)
-                    let options = PTState.ScanOptions chunk_size stopsig
-                    ptstate' <- PTState.applyWriterS options writer ptstate
+                    let options = PTScan.ScanOptions chunk_size stopsig
+                    ptstate' <- PTWriter.applyWriterS options writer ptstate
                     let newmap = Map.adjust (\_ -> ptstate') stateName (sStates state) :: PTMap
                     let new_state = state{sStates = newmap}
                     return new_state

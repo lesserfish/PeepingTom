@@ -10,37 +10,34 @@ import State
 import Text.Printf (printf)
 import Text.Read
 
-setTypeHelper :: String -> Maybe PTType.Type
-setTypeHelper "int8" = Just PTType.Int8
-setTypeHelper "int16" = Just PTType.Int16
-setTypeHelper "int32" = Just PTType.Int32
-setTypeHelper "int64" = Just PTType.Int64
+setTypeHelper :: String -> Maybe ScanTypes
+setTypeHelper "int8" = Just Int8
+setTypeHelper "int16" = Just Int16
+setTypeHelper "int32" = Just Int32
+setTypeHelper "int64" = Just Int64
+setTypeHelper "int" = Just Int
+setTypeHelper "string" = Just Str
 setTypeHelper _ = Nothing
 
 setTypeAction :: [String] -> State -> IO State
 setTypeAction args state = do
-    if length args == 0
+    if length args /= 1
         then do
-            putStrLn $ "set type requires at least one type as argument"
+            putStrLn $ "set type requires one argument: The type to scan for"
             putStrLn $ setTypeHelp
             return state
         else do
-            types <- loop args
-            let new_options = (sOptions state){oScanTypes = types}
-            let new_state = state{sOptions = new_options}
-            return new_state
-  where
-    loop :: [String] -> IO [PTType.Type]
-    loop [] = return []
-    loop (str : rest) = do
-        let maybetype = setTypeHelper $ (map toLower str)
-        case maybetype of
-            Nothing -> do
-                putStrLn $ printf "Could not understand type '%s'" str
-                return []
-            Just t -> do
-                tail <- loop rest
-                return $ [t] ++ tail
+            let arg = args !! 0
+            let maybetype = setTypeHelper arg
+            case maybetype of
+                Nothing -> do
+                    putStrLn $ printf "Could not understand type '%s'." arg
+                    putStrLn $ setTypeHelp
+                    return state
+                Just types -> do
+                    let new_options = (sOptions state){oScanTypes = types}
+                    let new_state = state{sOptions = new_options}
+                    return new_state
 
 setTypeHelp :: String
 setTypeHelp = "\nset type: Sets the scan type.\n\nUsage:\n\tset type [type] [type] [type]\n\nExamples:\n\tset type Int32 Int64"

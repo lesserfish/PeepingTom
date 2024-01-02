@@ -45,7 +45,7 @@ listStateCommand =
         }
 
 printMemoryHelper :: (String, PTState.PeepState) -> String
-printMemoryHelper (str, state) = printf "%s: \t\t PID: %d %d Candidates in %d Regions" name (PTState.psPID state) (PTState.candidateCount state) (PTState.regionCount state)
+printMemoryHelper (str, state) = printf "%s: \t\t PID: %d %d Candidates in %d Regions" name (PTState.psPID state) (PTState.matchCount state) (PTState.regionCount state)
   where
     name = if length str <= 10 then str else (take 10 str) ++ "..."
 

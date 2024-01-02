@@ -92,7 +92,7 @@ unsigned long get_matchesi(int PID, int value)
     unsigned long count = sm_get_num_matches();
     return count;
 }
-void update_values(int PID, int oldvalue, int newvalue)
+void update_values(int PID, int oldvalue, int newvalue, int section)
 {
     // Initialize the server
     sm_backend_exec_cmd("reset");
@@ -107,13 +107,19 @@ void update_values(int PID, int oldvalue, int newvalue)
     sm_backend_exec_cmd(command);
 
     
-    // Scan for values equal to 2
+    // Scan for values equal to oldvalue
     snprintf(command, 128, "%d", oldvalue);
     sm_backend_exec_cmd(command);
     double progress = 0;
     while(progress != 1.0)
     {
         progress = sm_get_scan_progress();
+    }
+
+    
+    if(section > 0){
+        snprintf(command, 128, "delete %d..", section);
+        sm_backend_exec_cmd(command);
     }
 
     snprintf(command, 128, "set %d", newvalue);

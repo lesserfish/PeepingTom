@@ -2,6 +2,7 @@ module Commands.Update (updateCommand) where
 
 import Commands.Base
 import qualified Data.Map as Map
+import qualified PeepingTom.Scan as PTScan
 import qualified PeepingTom.State as PTState
 import State
 import Text.Printf (printf)
@@ -22,9 +23,9 @@ updateAction args state = do
                 Just ptstate -> do
                     let stopsig = (oSendStopSig . sOptions $ state)
                     let chunk_size = (oChunkSize . sOptions $ state)
-                    let options = PTState.ScanOptions chunk_size stopsig
+                    let options = PTScan.ScanOptions chunk_size stopsig
 
-                    ptstate' <- PTState.updateStateS options ptstate
+                    ptstate' <- PTScan.updateStateS options ptstate
                     putStrLn $ PTState.showState 5 5 ptstate'
                     let newmap = Map.adjust (\_ -> ptstate') stateName (sStates state) :: PTMap
                     let new_state = state{sStates = newmap}

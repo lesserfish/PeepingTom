@@ -14,11 +14,13 @@ data RFilter
     | RFAll
     deriving (Show)
 
+data ScanTypes = Int8 | Int16 | Int32 | Int64 | Int | Str deriving (Show)
 data Options = Options
-    { oScanTypes :: [PTType.Type]
+    { oScanTypes :: ScanTypes
     , oRFilter :: RFilter
     , oChunkSize :: Int
     , oSendStopSig :: Bool
+    , oFastMode :: Bool
     }
 
 data State = State
@@ -31,14 +33,15 @@ data State = State
 defaultOptions :: Options
 defaultOptions =
     Options
-        { oScanTypes = PTType.intTypes
+        { oScanTypes = Int
         , oRFilter = RFDefault
         , oChunkSize = 10000
         , oSendStopSig = True
+        , oFastMode = True
         }
 
 instance Show Options where
-    show (Options types fltr chunk_size stop_sig) = printf "Types: %s\nFilter: %s\nChunk size: %s bytes\nSend Stop Signal: %s" (show types) (show fltr) (show chunk_size) (show stop_sig)
+    show (Options types fltr chunk_size stop_sig fm) = printf "Types: %s\nFilter: %s\nChunk size: %s bytes\nSend Stop Signal: %s\nFast Mode: %s" (show types) (show fltr) (show chunk_size) (show stop_sig) (show fm)
 
 emptyState :: State
 emptyState =
